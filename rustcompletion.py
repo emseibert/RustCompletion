@@ -30,10 +30,14 @@ def callRacer(s):
         if limit > 5:
             break
         elif line != b'':
+
             splitLine = str(line).split(',')
             matched = splitLine[len(splitLine) - 1]
             #print(str(matched))
-            matched = str(parseLine(str(matched)))
+            test = matched
+            if test.strip()[:6] == '#[path':
+                continue
+            matched = parseLine(matched.strip())
             t =  (matched, matched)
             
             results.append(t)
@@ -46,6 +50,14 @@ def parseLine(line):
     result = line
     #print(splitLine)
     #print(splitLine[0]=='pub')
-    if (splitLine[0]=='pub' and splitLine[1]=='struct'):
-        result = splitLine[2].split('<')[0]
+    if (splitLine[0]=='#[cfg(not(test))]'):
+        splitLine.pop(0)
+        print(splitLine)
+    if (splitLine[0]=='pub'): 
+        if (splitLine[1]=='struct'):
+            result = splitLine[2].split('<')[0]
+        elif (splitLine[1]=='mod'):
+            result = splitLine[2].split(';')[0]
+        elif (splitLine[1]=='fn'):
+            result = splitLine[2].split('<')[0]
     return result
