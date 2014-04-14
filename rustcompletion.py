@@ -11,6 +11,7 @@ import subprocess
 class AllAutocomplete(sublime_plugin.EventListener):
 
     def on_query_completions(self, view, prefix, locations):
+
         line = [view.substr(sublime.Region(view.line(l).a, l)) for l in locations]
         commandsOnLine = line[0].split(' ')
         lineToCall = commandsOnLine[len(commandsOnLine) - 1]
@@ -18,11 +19,10 @@ class AllAutocomplete(sublime_plugin.EventListener):
         return matches
 
 def callRacer(s):
-    #os environ = rust src code folder location
-    os.environ['RUST_SRC_PATH'] = "/Users/emilyseibert/rust/src"
-    #location racer executable, 
-    cmd = "/Users/emilyseibert/racer/bin/racer complete " + s
-
+    #os.environ['RUST_SRC_PATH'] = "/Users/emilyseibert/rust/src"
+    os.environ['RUST_SRC_PATH'] = '/home/student/rust/src'
+    #cmd = "/Users/emilyseibert/racer/bin/racer complete " + s
+    cmd = 'cd /home/student/racer/bin/; ./racer complete ' + s
     (stdout, stderr) = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True).communicate()
     results = []
     limit = 0
