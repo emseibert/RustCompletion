@@ -18,7 +18,9 @@ class AllAutocomplete(sublime_plugin.EventListener):
         return matches
 
 def callRacer(s):
+    #os environ = rust src code folder location
     os.environ['RUST_SRC_PATH'] = "/Users/emilyseibert/rust/src"
+    #location racer executable, 
     cmd = "/Users/emilyseibert/racer/bin/racer complete " + s
 
     (stdout, stderr) = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True).communicate()
@@ -28,9 +30,10 @@ def callRacer(s):
         if limit > 5:
             break
         elif line != b'':
-
-            print(line)
-            t =  (str(line), str(line))
+            splitLine = str(line).split(',')
+            matched = splitLine[len(splitLine) - 1]
+            
+            t =  (matched, matched)
             results.append(t)
             limit += 1
 
