@@ -22,7 +22,7 @@ def callRacer(s):
     #os.environ['RUST_SRC_PATH'] = "/Users/emilyseibert/rust/src"
     os.environ['RUST_SRC_PATH'] = '/home/student/rust/src'
     #cmd = "/Users/emilyseibert/racer/bin/racer complete " + s
-    cmd = 'cd /home/student/racer/bin/; ./racer complete ' + s
+    cmd = 'cd /home/student/CS4414FinalProject/racer/bin/; ./racer complete ' + s
     (stdout, stderr) = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True).communicate()
     results = []
     limit = 0
@@ -32,10 +32,20 @@ def callRacer(s):
         elif line != b'':
             splitLine = str(line).split(',')
             matched = splitLine[len(splitLine) - 1]
-            
+            #print(str(matched))
+            matched = str(parseLine(str(matched)))
             t =  (matched, matched)
+            
             results.append(t)
             limit += 1
 
     return results
 
+def parseLine(line):
+    splitLine = line.split(' ')
+    result = line
+    #print(splitLine)
+    #print(splitLine[0]=='pub')
+    if (splitLine[0]=='pub' and splitLine[1]=='struct'):
+        result = splitLine[2].split('<')[0]
+    return result
