@@ -1,5 +1,5 @@
-(defvar racer-cmd "~/racer/bin/racer")
-(defvar rust-srcpath "~/rust/src")
+(defvar racer-cmd "/home/pld/src/rust/racer/bin/racer")
+(defvar rust-srcpath "/usr/local/src/rust/src")
 
 (defun racer--write-tmp-file (tmpfilename) 
     (push-mark)
@@ -68,7 +68,7 @@
 (defun racer-company-complete (command &optional arg &rest ignored)
   (interactive)
   ;(message "PHIL racer-company-complete %s %s %s" command arg ignored)
-  (when (looking-back "[a-zA-z1-9:]")
+  (when (looking-back "[a-zA-z1-9:.]")
     (case command
       (prefix (racer--prefix))
       (candidates (racer--candidates))
