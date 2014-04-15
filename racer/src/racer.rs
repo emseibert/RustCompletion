@@ -367,7 +367,7 @@ fn search_scope(searchstr:&str, filepath: &Path, msrc: &str, mut point:uint,
     while point > 0 {
         let n = scopes::scope_start(msrc, point);
         let s = scopes::mask_sub_scopes(msrc.slice(n,point));
-        search_for_let(n, s, searchstr, filepath, outputfn);
+        search_for_let(n, s.as_slice(), searchstr, filepath, outputfn);
         if n == 0 { 
             break; 
         }
@@ -383,7 +383,7 @@ fn search_file_text(searchstr:&str, filepath: &Path, point: uint,
     let mut l = searchstr.split_str(".");
     let path: Vec<&str> = l.collect();
 
-    search_file_text_(path.as_slice(), filepath, msrc, point, outputfn);
+    search_file_text_(path.as_slice(), filepath, msrc.as_slice(), point, outputfn);
 }
 
 fn search_file_text_(path: &[&str], filepath: &Path, msrc: &str, point: uint, 

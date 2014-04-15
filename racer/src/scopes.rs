@@ -1,5 +1,6 @@
 use std::io::File;
 use std::io::BufferedReader;
+use std::strbuf::StrBuf;
 
 pub fn scope_start(src:&str, point:uint) -> uint {
     let s = src.slice(0,point);
@@ -21,8 +22,10 @@ pub fn scope_start(src:&str, point:uint) -> uint {
     return pt;
 }
 
-fn gen_mask(mut len: uint) -> ~str {
-    let mut s = ~"";
+fn gen_mask(mut len: uint) -> StrBuf {
+    let mut s = StrBuf::new();
+    s.push_str("");
+    //let mut s = ~"";
     while len != 0 {
         len -=1;
         s.push_str(" ");
@@ -30,8 +33,10 @@ fn gen_mask(mut len: uint) -> ~str {
     return s;
 }
 
-pub fn mask_comments(src:&str) -> ~str {
-    let mut result = ~"";
+pub fn mask_comments(src:&str) -> StrBuf {
+    let mut result = StrBuf::new();
+    result.push_str("");
+   // let mut result = ~"";
     let mut s:&str = src;
     let mut in_comment = false;
     let mut res = s.find_str("//");
@@ -40,7 +45,7 @@ pub fn mask_comments(src:&str) -> ~str {
         let end = res.unwrap();
         if in_comment {
             // mask out the comment
-            result.push_str(gen_mask(end));
+            result.push_str(gen_mask(end).as_slice());
             s = s.slice_from(end);
             res = s.find_str("//");
             in_comment = false;
@@ -56,8 +61,9 @@ pub fn mask_comments(src:&str) -> ~str {
     return result;
 }
 
-pub fn mask_sub_scopes(src:&str) -> ~str {
-    let mut result = ~"";
+pub fn mask_sub_scopes(src:&str) -> StrBuf {
+    let mut result = StrBuf::new();
+    result.push_str("");
     let mut levels = 0;
     
     for c in src.chars() {
