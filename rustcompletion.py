@@ -31,14 +31,11 @@ def callRacer(s):
         if limit > 5:
             break
         elif line != b'':
-
-            splitLine = str(line).split(',')
-            matched = splitLine[len(splitLine) - 1]
-            #print(str(matched))
-            test = matched
-            if test.strip()[:6] == '#[path':
+            line = line.decode(encoding='UTF-8').strip()
+            test = line
+            if test[:6] == '#[path':
                 continue
-            matched = parseLine(matched.strip())
+            matched = parseLine(line)
             t =  (matched, matched)
             
             results.append(t)
@@ -49,11 +46,9 @@ def callRacer(s):
 def parseLine(line):
     splitLine = line.split(' ')
     result = line
-    #print(splitLine)
-    #print(splitLine[0]=='pub')
+    print(splitLine)
     if (splitLine[0]=='#[cfg(not(test))]'):
         splitLine.pop(0)
-        print(splitLine)
     if (splitLine[0]=='pub'): 
         if (splitLine[1]=='struct'):
             result = splitLine[2].split('<')[0]
@@ -64,7 +59,7 @@ def parseLine(line):
         elif (splitLine[1]=='trait'):
             result = splitLine[2].split('<')[0]
     if (splitLine[0].strip()=="fn"):
-            result = splitLine[1].strip()
+            result = splitLine[1].split('(')[0].strip()
     if (splitLine[1].strip()=="fn"):
-            result = splitLine[2].strip()
+            result = splitLine[2].split('(')[0].strip()
     return result

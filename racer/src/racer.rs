@@ -27,7 +27,6 @@ pub struct Match {
     pub linetxt: ~str,
     pub mtype: MatchType
 }
-//static mut linetxt: &'static str = &"";
 
 
 
@@ -124,13 +123,11 @@ pub fn find_ident_end(s : &str, pos : uint) -> uint {
 //My shit again
 
 fn locate_func_in_defn(filepath : &Path, s : &str, def : &str, outputfn : &|Match|) {
-    println!("fp: {}",filepath.as_str());
     let file = File::open(filepath);
     let mut found = false;
     if file.is_err() { return; }
     let fnsearchstr = "fn ";
     let mut pt = 0;
-    println!("def: {}",def);
     for line_r in BufferedReader::new(file).lines() {
         let line = line_r.unwrap();
         if (line.find_str(" "+ def+ " ").is_some() || line.find_str(" "+ def+ "<").is_some()) {
@@ -138,10 +135,10 @@ fn locate_func_in_defn(filepath : &Path, s : &str, def : &str, outputfn : &|Matc
 
         }
         
-        if (line.trim() =="}" && found == true) {
+        if ((line.find_str("trait").is_some() == true || line.find_str("struct").is_some()) && found == true) {
             break;
         }
-        if (found==true) {
+        if (found==true && line.find_str("///").is_none()==true) {
         line.find_str(fnsearchstr+s).map(|n|{
            let end = find_path_end(line, n+fnsearchstr.len());
            let l = line.slice(n + fnsearchstr.len(), end);
@@ -159,7 +156,6 @@ fn locate_func_in_defn(filepath : &Path, s : &str, def : &str, outputfn : &|Matc
 
 fn locate_defn_in_module(filepath : &Path, s : &str, outputfn : &|Match|) {
     debug!("locate_defn_in_module {} {}",filepath.display(), s);
-    println!("s: {}",s)
     let file = File::open(filepath);
     if file.is_err() { return; }
     let modsearchstr = "mod ";
@@ -252,8 +248,6 @@ fn locate_defn_in_module(filepath : &Path, s : &str, outputfn : &|Match|) {
 
 fn locate_path_via_module(filepath: &Path, p: &[&str], outputfn: &|Match|) {
     debug!("locate_path_via_module: {} {} ",filepath.as_str(),p);
-    println!("p: {} path: {}",p,filepath.as_str());
-    //println!("outputfn: {}", (*outputfn);
     if p.len() == 0 {
         return locate_defn_in_module(filepath, "", outputfn);
     }
@@ -263,7 +257,6 @@ fn locate_path_via_module(filepath: &Path, p: &[&str], outputfn: &|Match|) {
     }
     if p.len() == 3 {
         let dir = filepath.dir_path();
-        println!("dir: {}", dir.as_str());
         return locate_func_in_defn(&dir.join(p[0]+".rs"),p[2],p[1],outputfn);
     }
     let file = File::open(filepath);

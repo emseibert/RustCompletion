@@ -15,11 +15,12 @@ pub mod racer;
 
 fn match_fn(m:Match) {
     let (linenum, charnum) = scopes::point_to_coords2(&m.filepath, m.point).unwrap();
-    std::io::println("MATCH "+m.matchstr + 
+    /*std::io::println("MATCH "+m.matchstr + 
                      "," + linenum.to_str() + 
                      "," + charnum.to_str() + 
                      "," + m.filepath.as_str().unwrap() + 
-                     "," +  m.linetxt);
+                     "," +  m.linetxt);*/
+    std::io::println(m.linetxt)
     //racer::setLastMatch(m.linetxt);
 }
 
