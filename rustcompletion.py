@@ -22,9 +22,10 @@ def callRacer(s):
     #os.environ['RUST_SRC_PATH'] = "/Users/emilyseibert/rust/src"
     os.environ['RUST_SRC_PATH'] = '/home/student/rust/src'
     #cmd = "/Users/emilyseibert/racer/bin/racer complete " + s
-    cmd = 'cd /home/student/CS4414FinalProject/racer/bin/; ./racer complete ' + s
+    cmd = 'cd "/home/student/.config/sublime-text-3/Packages/Complete/racer/bin/"; ./racer complete ' + s
     (stdout, stderr) = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True).communicate()
     results = []
+    #print(stdout)
     limit = 0
     for line in stdout.splitlines():
         if limit > 5:
@@ -60,4 +61,10 @@ def parseLine(line):
             result = splitLine[2].split(';')[0]
         elif (splitLine[1]=='fn'):
             result = splitLine[2].split('<')[0]
+        elif (splitLine[1]=='trait'):
+            result = splitLine[2].split('<')[0]
+    if (splitLine[0].strip()=="fn"):
+            result = splitLine[1].strip()
+    if (splitLine[1].strip()=="fn"):
+            result = splitLine[2].strip()
     return result

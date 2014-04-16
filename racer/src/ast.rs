@@ -84,7 +84,7 @@ impl visit::Visitor<()> for MyViewItemVisitor {
                         }
                     }
                     ast::ViewPathGlob(_, id) => {
-                        println!("PHIL got glob {:?}",id);
+                        //println!("PHIL got glob {:?}",id);
                     }
                 }
             },

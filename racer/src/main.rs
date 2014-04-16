@@ -20,6 +20,7 @@ fn match_fn(m:Match) {
                      "," + charnum.to_str() + 
                      "," + m.filepath.as_str().unwrap() + 
                      "," +  m.linetxt);
+    //racer::setLastMatch(m.linetxt);
 }
 
 fn complete() {

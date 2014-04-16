@@ -1,10 +1,11 @@
+#![feature(globs)]
 extern crate std;
 extern crate log;
 extern crate collections;
 use std::io::File;
 use std::io::BufferedReader;
 use std::str;
-
+use std::cell::Cell;
 pub mod scopes;
 pub mod ast;
 pub mod resolve;
@@ -15,6 +16,7 @@ pub enum MatchType {
     Function,
     Crate,
     Let,
+    Trait,
     StructField
 }
 
@@ -25,6 +27,10 @@ pub struct Match {
     pub linetxt: ~str,
     pub mtype: MatchType
 }
+//static mut linetxt: &'static str = &"";
+
+
+
 
 pub fn getline(filepath : &Path, linenum : uint) -> ~str {
     let mut i = 0;
@@ -115,14 +121,52 @@ pub fn find_ident_end(s : &str, pos : uint) -> uint {
     return end;
 }
 
+//My shit again
+
+fn locate_func_in_defn(filepath : &Path, s : &str, def : &str, outputfn : &|Match|) {
+    println!("fp: {}",filepath.as_str());
+    let file = File::open(filepath);
+    let mut found = false;
+    if file.is_err() { return; }
+    let fnsearchstr = "fn ";
+    let mut pt = 0;
+    println!("def: {}",def);
+    for line_r in BufferedReader::new(file).lines() {
+        let line = line_r.unwrap();
+        if (line.find_str(" "+ def+ " ").is_some() || line.find_str(" "+ def+ "<").is_some()) {
+            found = true;
+
+        }
+        
+        if (line.trim() =="}" && found == true) {
+            break;
+        }
+        if (found==true) {
+        line.find_str(fnsearchstr+s).map(|n|{
+           let end = find_path_end(line, n+fnsearchstr.len());
+           let l = line.slice(n + fnsearchstr.len(), end);
+            let m = Match {matchstr: l.to_owned(), 
+                           filepath: filepath.clone(), 
+                           point: pt + n + fnsearchstr.len(), 
+                           linetxt: line.to_owned(),
+                           mtype: Function
+            };
+            (*outputfn)(m);            
+        });
+}
+}
+}
+
 fn locate_defn_in_module(filepath : &Path, s : &str, outputfn : &|Match|) {
     debug!("locate_defn_in_module {} {}",filepath.display(), s);
+    println!("s: {}",s)
     let file = File::open(filepath);
     if file.is_err() { return; }
     let modsearchstr = "mod ";
     let fnsearchstr = "fn ";
     let structsearchstr = "struct ";
     let cratesearchstr = "extern crate ";
+    let traitsearchstr = "trait ";
     let mut pt = 0;
 
     for line_r in BufferedReader::new(file).lines() {
@@ -161,6 +205,17 @@ fn locate_defn_in_module(filepath : &Path, s : &str, outputfn : &|Match|) {
                            mtype: Struct};
             (*outputfn)(m);
         }
+        //Oh boy my shit
+        for n in line.find_str(traitsearchstr+s).move_iter() {
+            let end = find_path_end(line, n+8);
+            let l = line.slice(n+8, end);
+            let m = Match {matchstr: l.to_owned(), 
+                           filepath: filepath.clone(), 
+                           point: pt + n + traitsearchstr.len(),
+                           linetxt: line.to_owned(),
+                           mtype: Trait};
+            (*outputfn)(m);
+        }
 
         for n in line.find_str(cratesearchstr+s).move_iter() {
             let end = find_path_end(line, n+ cratesearchstr.len());
@@ -197,7 +252,8 @@ fn locate_defn_in_module(filepath : &Path, s : &str, outputfn : &|Match|) {
 
 fn locate_path_via_module(filepath: &Path, p: &[&str], outputfn: &|Match|) {
     debug!("locate_path_via_module: {} {} ",filepath.as_str(),p);
-    
+    println!("p: {} path: {}",p,filepath.as_str());
+    //println!("outputfn: {}", (*outputfn);
     if p.len() == 0 {
         return locate_defn_in_module(filepath, "", outputfn);
     }
@@ -205,7 +261,11 @@ fn locate_path_via_module(filepath: &Path, p: &[&str], outputfn: &|Match|) {
     if p.len() == 1 {
         return locate_defn_in_module(filepath, p[0], outputfn);
     }
-
+    if p.len() == 3 {
+        let dir = filepath.dir_path();
+        println!("dir: {}", dir.as_str());
+        return locate_func_in_defn(&dir.join(p[0]+".rs"),p[2],p[1],outputfn);
+    }
     let file = File::open(filepath);
     if file.is_err() { return }
 
@@ -224,9 +284,9 @@ fn locate_path_via_module(filepath: &Path, p: &[&str], outputfn: &|Match|) {
                                        mtype: Module
                     });
             } else {
-                debug!("PHIL following: {}: {} ",l,line);
+                //debug!("PHIL following: {}: {} ",l,line);
                 let dir = filepath.dir_path();
-                debug!("PHIL DIR {}", dir.as_str().unwrap());
+                //debug!("PHIL DIR {}", dir.as_str().unwrap());
                 // try searching file.rs
                 locate_path_via_module(&dir.join(l+".rs"), p.tail(), outputfn);
                 // try searching dir/mod.rs
@@ -249,11 +309,11 @@ fn search_lines(filepath: &Path, f:|~str| ) {
 pub fn locate_abs_path(p : &[&str], outputfn : &|Match|) {
     let srcpaths = std::os::getenv("RUST_SRC_PATH").unwrap();
     let cratename = p[0];
-
+    
     let v: Vec<&str> = srcpaths.split_str(":").collect();
     let v = v.append_one(".");
     for srcpath in v.move_iter() {
-        println!("PHIL searching srcpath: {}",srcpath);
+        //println!("PHIL searching srcpath: {}",srcpath);
         {
             // try lib<cratename>/lib.rs, like in the rust source dir
             let cratelibname = "lib" + cratename;
@@ -279,6 +339,7 @@ pub fn locate_abs_path(p : &[&str], outputfn : &|Match|) {
             //println!("PHIL search_crate path {}",path.as_str());
             locate_path_via_module(&filepath, p.slice_from(1), outputfn);
         }
+
     }    
 }
 
@@ -294,7 +355,7 @@ pub fn to_refs<'a>(v: &'a Vec<~str>) -> Vec<&'a str> {
 fn search_use_imports(filepath : &Path, path : &[&str], outputfn : &|Match|) {
     search_lines(filepath, |line|{
         if line.find_str("use ").and(line.find_str(path[0])).is_some() {
-            println!("PHIL found {}", line);
+            //println!("PHIL found {}", line);
             for fqn_ in ast::parse_view_item(line).iter() {
                 // HACK, convert from &[~str] to &[&str]
                 let v = to_refs(fqn_);  
@@ -400,7 +461,7 @@ fn search_file_text_(path: &[&str], filepath: &Path, msrc: &str, point: uint,
             t.map(|m| {
                 match m.mtype {
                     Struct => {
-                        println!("PHIL search str is {}",path[path.len()-1]);
+                        //println!("PHIL search str is {}",path[path.len()-1]);
                         for field in resolve::get_fields_of_struct(&m).iter() {
                             if field.starts_with(path[path.len()-1]) {
                                 (*outputfn)(Match { matchstr: field.to_owned(),
