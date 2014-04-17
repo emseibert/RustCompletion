@@ -52,7 +52,7 @@ class AllAutocomplete(sublime_plugin.EventListener):
 
 def callRacerCrates(s):
     #os.environ['RUST_SRC_PATH'] = "/Users/emilyseibert/rust/src"
-    os.environ['RUST_SRC_PATH'] = os.join(os.dirname(os.realpath(__file__)),'rust/src')
+    os.environ['RUST_SRC_PATH'] = str(os.path.join(os.path.dirname(os.path.realpath(__file__)),'rust/src'))
     #os.environ['RUST_SRC_PATH'] = '/home/student/.config/sublime-text-3/Packages/CS4414FinalProject/rust/src'
 
     results = []
