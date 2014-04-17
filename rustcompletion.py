@@ -11,7 +11,6 @@ import subprocess
 class AllAutocomplete(sublime_plugin.EventListener):
 
     def on_query_completions(self, view, prefix, locations):
-
         line = [view.substr(sublime.Region(view.line(l).a, l)) for l in locations]
         commandsOnLine = line[0].split(' ')
         lineToCall = commandsOnLine[len(commandsOnLine) - 1]
@@ -19,10 +18,10 @@ class AllAutocomplete(sublime_plugin.EventListener):
         return matches
 
 def callRacer(s):
-    #os.environ['RUST_SRC_PATH'] = "/Users/emilyseibert/rust/src"
-    os.environ['RUST_SRC_PATH'] = '/home/student/rust/src'
-    #cmd = "/Users/emilyseibert/racer/bin/racer complete " + s
-    cmd = 'cd /home/student/CS4414FinalProject/racer/bin/; ./racer complete ' + s
+    os.environ['RUST_SRC_PATH'] = "/Users/emilyseibert/rust/src"
+    #os.environ['RUST_SRC_PATH'] = '/home/student/rust/src'
+    cmd = "cd /Users/emilyseibert/Library/'Application Support'/'Sublime Text 3'/Packages/CS4414FinalProject/racer/bin/; ./racer complete " + s
+    #cmd = 'cd /home/student/CS4414FinalProject/racer/bin/; ./racer complete ' + s
     (stdout, stderr) = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True).communicate()
     results = []
     limit = 0
@@ -43,6 +42,7 @@ def callRacer(s):
             results.append(t)
             limit += 1
 
+    print(results)
     return results
 
 def parseLine(line):
