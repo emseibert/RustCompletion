@@ -118,30 +118,21 @@ def parseLine(line):
         splitLine.pop(0)
     if (splitLine[0]=='pub'): 
         if (splitLine[1]=='struct'):
-            print("1")
             result = splitLine[2].split('<')[0] + ";"
         elif (splitLine[1]=='mod'):
-            print("2")
-
             result = splitLine[2].split(';')[0] + ";"
         elif (splitLine[1]=='fn'):
-            print("3")
-            result = splitLine[2].split('<')[0] + ";"
+            result = splitLine[2].split('<')[0] + "()"
         elif (splitLine[1]=='trait'):
-            print("4")
             result = splitLine[2].split('<')[0] + ";"
         elif (splitLine[1]=='enum'):
             result = splitLine[2].split('<')[0] + ";"
     if (splitLine[0].strip()=="fn"):
-            print("5")
-            print(splitLine[1])
             if splitLine[1].strip().find('<') > -1:
                 result = splitLine[1].strip().split('<')[0] + "()"
             else:
                 result = splitLine[1].split('(')[0].strip() + "()"
     if (splitLine[1].strip()=="fn"):
-            print("6")
-            print(splitLine[2])
             if splitLine[2].find('<') > -1:
                 result = splitLine[2].strip().split('<')[0] + "()"
             else:
