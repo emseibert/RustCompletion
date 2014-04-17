@@ -17,6 +17,7 @@ pub enum MatchType {
     Crate,
     Let,
     Trait,
+    Enum,
     StructField
 }
 
@@ -163,6 +164,7 @@ fn locate_defn_in_module(filepath : &Path, s : &str, outputfn : &|Match|) {
     let structsearchstr = "struct ";
     let cratesearchstr = "extern crate ";
     let traitsearchstr = "trait ";
+    let enumsearchstr = "enum ";
     let mut pt = 0;
 
     for line_r in BufferedReader::new(file).lines() {
@@ -210,6 +212,18 @@ fn locate_defn_in_module(filepath : &Path, s : &str, outputfn : &|Match|) {
                            point: pt + n + traitsearchstr.len(),
                            linetxt: line.to_owned(),
                            mtype: Trait};
+            (*outputfn)(m);
+        }
+
+        //Oh boy my shit again
+        for n in line.find_str(enumsearchstr+s).move_iter() {
+            let end = find_path_end(line, n+8);
+            let l = line.slice(n+8, end);
+            let m = Match {matchstr: l.to_owned(), 
+                           filepath: filepath.clone(), 
+                           point: pt + n + traitsearchstr.len(),
+                           linetxt: line.to_owned(),
+                           mtype: Enum};
             (*outputfn)(m);
         }
 
@@ -298,7 +312,10 @@ fn search_lines(filepath: &Path, f:|~str| ) {
         f(line.unwrap());
     }
 }
+pub fn find_crate(s: ~str,outputfn : &|Match|) {
+    let srcpaths = std::os::getenv("RUST_SRC_PATH").unwrap();
 
+}
 pub fn locate_abs_path(p : &[&str], outputfn : &|Match|) {
     let srcpaths = std::os::getenv("RUST_SRC_PATH").unwrap();
     let cratename = p[0];
