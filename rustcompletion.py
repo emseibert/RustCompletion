@@ -12,11 +12,11 @@ class AllAutocomplete(sublime_plugin.EventListener):
 
     def on_query_completions(self, view, prefix, locations):
         line = [view.substr(sublime.Region(view.line(l).a, l)) for l in locations]
-        print("line")
-        print(line)
+        #print("line")
+       # print(line)
         line_1 = line[0]
-        print("len")
-        print(str(len(line_1)))
+        #print("len")
+       # print(str(len(line_1)))
         if len(line_1)>2:
             #Parse line to get all prior use's (let x = aa::bb::cc -> aa::bb)
             res = kfels_parse(prefix, line)
@@ -27,8 +27,8 @@ class AllAutocomplete(sublime_plugin.EventListener):
                 line_1 = view.substr(regions[0]) + '::' + prefix
 
         commandsOnLine = line_1.split(' ')
-        print("commandsOnLine")
-        print(commandsOnLine)
+        #print("commandsOnLine")
+        #print(commandsOnLine)
         isCrate = ""
         matches = []
 
@@ -44,15 +44,15 @@ class AllAutocomplete(sublime_plugin.EventListener):
         else:
             lineToCall = commandsOnLine[len(commandsOnLine) - 1]
             matches = callRacer(lineToCall)
-
         print("lineToCall")
         print(lineToCall)
         matches_no_dup = without_duplicates(matches)
         return matches_no_dup
 
+
 def callRacerCrates(s):
-    #os.environ['RUST_SRC_PATH'] = "/Users/emilyseibert/rust/src"
-    os.environ['RUST_SRC_PATH'] = '/home/student/rust/src'
+    os.environ['RUST_SRC_PATH'] = "/Users/emilyseibert/rust/src"
+    #os.environ['RUST_SRC_PATH'] = '/home/student/rust/src'
     #os.environ['RUST_SRC_PATH'] = '/home/student/.config/sublime-text-3/Packages/CS4414FinalProject/rust/src'
 
     results = []
@@ -74,13 +74,13 @@ def kfels_parse(prefix,line):
     return new_prefix
 
 def callRacer(s):
-    #os.environ['RUST_SRC_PATH'] = "/Users/emilyseibert/rust/src"
-    os.environ['RUST_SRC_PATH'] = '/home/student/rust/src'
-    #cmd = "cd /Users/emilyseibert/Library/'Application Support'/'Sublime Text 3'/Packages/CS4414FinalProject/racer/bin/; ./racer complete " + s
+
     #os.environ['RUST_SRC_PATH'] = '/home/student/.config/sublime-text-3/Packages/CS4414FinalProject/rust/src'
-    #cmd = "/Users/emilyseibert/racer/bin/racer complete " + s
+    os.environ['RUST_SRC_PATH'] = "/Users/emilyseibert/rust/src"
+    cmd = "cd /Users/emilyseibert/Library/'Application Support'/'Sublime Text 3'/Packages/CS4414FinalProject/racer/bin/; ./racer complete " + s
     #cmd = 'cd /home/student/.config/sublime-text-3/Packages/CS4414FinalProject/racer/bin/; ./racer complete ' + s
-    cmd = 'cd /home/student/CS4414FinalProj/racer/bin/; ./racer complete ' + s
+    #cmd = 'cd /home/student/CS4414FinalProject/racer/bin/; ./racer complete ' + s
+    #cmd = 'cd "/home/student/.config/sublime-text-3/Packages/Complete/racer/bin/"; ./racer complete ' + s
     (stdout, stderr) = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True).communicate()
     results = []
     #print(stdout)
@@ -106,30 +106,46 @@ def callRacer(s):
             results.append(t)
             limit += 1
 
-    print(results)
+   # print(results)
     return results
 
 def parseLine(line):
+    print (line)
     splitLine = line.split(' ')
     result = line
-    print(splitLine)
+   # print(splitLine)
     if (splitLine[0]=='#[cfg(not(test))]'):
         splitLine.pop(0)
     if (splitLine[0]=='pub'): 
         if (splitLine[1]=='struct'):
+            print("1")
             result = splitLine[2].split('<')[0] + ";"
         elif (splitLine[1]=='mod'):
+            print("2")
+
             result = splitLine[2].split(';')[0] + ";"
         elif (splitLine[1]=='fn'):
+            print("3")
             result = splitLine[2].split('<')[0] + ";"
         elif (splitLine[1]=='trait'):
+            print("4")
             result = splitLine[2].split('<')[0] + ";"
         elif (splitLine[1]=='enum'):
             result = splitLine[2].split('<')[0] + ";"
     if (splitLine[0].strip()=="fn"):
-            result = splitLine[1].split('(')[0].strip() + "()"
+            print("5")
+            print(splitLine[1])
+            if splitLine[1].strip().find('<') > -1:
+                result = splitLine[1].strip().split('<')[0] + "()"
+            else:
+                result = splitLine[1].split('(')[0].strip() + "()"
     if (splitLine[1].strip()=="fn"):
-            result = splitLine[2].split('(')[0].strip() + "()"
+            print("6")
+            print(splitLine[2])
+            if splitLine[2].find('<') > -1:
+                result = splitLine[2].strip().split('<')[0] + "()"
+            else:
+                result = splitLine[2].split('(')[0].strip() + "()"
     return result 
 
 # keeps first instance of every word and retains the original order
