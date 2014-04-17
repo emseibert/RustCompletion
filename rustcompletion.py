@@ -47,8 +47,8 @@ class AllAutocomplete(sublime_plugin.EventListener):
 
         print("lineToCall")
         print(lineToCall)
-        
-        return matches
+        matches_no_dup = without_duplicates(matches)
+        return matches_no_dup
 
 def callRacerCrates(s):
     #os.environ['RUST_SRC_PATH'] = "/Users/emilyseibert/rust/src"
@@ -93,7 +93,14 @@ def callRacer(s):
             test = line
             if test[:6] == '#[path':
                 continue
+
+            #remove commented code and test functions from results
+            if test.startswith('//') or test.startswith('test!('): #remove commented code and test functions
+                print(test + " is a comment")
+                continue
+            print("before: " + line)
             matched = parseLine(line)
+            print("after: " + matched)
             t =  (matched, matched)
             
             results.append(t)
@@ -124,3 +131,11 @@ def parseLine(line):
     if (splitLine[1].strip()=="fn"):
             result = splitLine[2].split('(')[0].strip() + "()"
     return result 
+
+# keeps first instance of every word and retains the original order
+def without_duplicates(words):
+    result = []
+    for w in words:
+        if w not in result:
+            result.append(w)
+    return result
