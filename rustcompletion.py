@@ -14,13 +14,17 @@ class AllAutocomplete(sublime_plugin.EventListener):
         line = [view.substr(sublime.Region(view.line(l).a, l)) for l in locations]
         print("line")
         print(line)
-        #Parse line to get all prior use's (let x = aa::bb::cc -> aa::bb)
-        res = kfels_parse(prefix, line)
-        regions = view.find_all(r'use (.*?)::%s'%res,)
         line_1 = line[0]
-        if len(regions) is not 0:
-            #print("region: " + view.substr(regions[0]))
-            line_1 = view.substr(regions[0]) + '::' + prefix
+        print("len")
+        print(str(len(line_1)))
+        if len(line_1)>2:
+            #Parse line to get all prior use's (let x = aa::bb::cc -> aa::bb)
+            res = kfels_parse(prefix, line)
+            regions = view.find_all(r'use (.*?)::%s'%res,)
+        
+            if len(regions) is not 0:
+                #print("region: " + view.substr(regions[0]))
+                line_1 = view.substr(regions[0]) + '::' + prefix
 
         commandsOnLine = line_1.split(' ')
         print("commandsOnLine")
@@ -47,7 +51,9 @@ class AllAutocomplete(sublime_plugin.EventListener):
         return matches
 
 def callRacerCrates(s):
-    os.environ['RUST_SRC_PATH'] = "/Users/emilyseibert/rust/src"
+    #os.environ['RUST_SRC_PATH'] = "/Users/emilyseibert/rust/src"
+    os.environ['RUST_SRC_PATH'] = '/home/student/.config/sublime-text-3/Packages/CS4414FinalProject/rust/src'
+    
     results = []
     for dirs in os.listdir(os.environ['RUST_SRC_PATH']):
         if dirs.find("lib" + s, 0) > -1:
