@@ -51,7 +51,7 @@ class AllAutocomplete(sublime_plugin.EventListener):
 
 
 def callRacerCrates(s):
-    os.environ['RUST_SRC_PATH'] = "/Users/emilyseibert/rust/src"
+    #os.environ['RUST_SRC_PATH'] = "/Users/emilyseibert/rust/src"
     #os.environ['RUST_SRC_PATH'] = '/home/student/rust/src'
     #os.environ['RUST_SRC_PATH'] = '/home/student/.config/sublime-text-3/Packages/CS4414FinalProject/rust/src'
 
@@ -76,10 +76,11 @@ def kfels_parse(prefix,line):
 def callRacer(s):
 
     #os.environ['RUST_SRC_PATH'] = '/home/student/.config/sublime-text-3/Packages/CS4414FinalProject/rust/src'
-    os.environ['RUST_SRC_PATH'] = "/Users/emilyseibert/rust/src"
-    cmd = "cd /Users/emilyseibert/Library/'Application Support'/'Sublime Text 3'/Packages/CS4414FinalProject/racer/bin/; ./racer complete " + s
+    #os.environ['RUST_SRC_PATH'] = "/Users/emilyseibert/rust/src"
+
+    #cmd = "cd /Users/emilyseibert/Library/'Application Support'/'Sublime Text 3'/Packages/CS4414FinalProject/racer/bin/; ./racer complete " + s
     #cmd = 'cd /home/student/.config/sublime-text-3/Packages/CS4414FinalProject/racer/bin/; ./racer complete ' + s
-    #cmd = 'cd /home/student/CS4414FinalProject/racer/bin/; ./racer complete ' + s
+    cmd = 'cd /home/student/CS4414FinalProj/racer/bin/; ./racer complete ' + s
     #cmd = 'cd "/home/student/.config/sublime-text-3/Packages/Complete/racer/bin/"; ./racer complete ' + s
     (stdout, stderr) = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True).communicate()
     results = []
@@ -132,6 +133,12 @@ def parseLine(line):
             result = splitLine[2].split('<')[0] + ";"
         elif (splitLine[1]=='enum'):
             result = splitLine[2].split('<')[0] + ";"
+        elif (splitLine[1].strip()=='unsafe'):
+            if (splitLine[2].strip()=='fn'):
+                if splitLine[3].strip().find('<') > -1:
+                    result = splitLine[3].strip().split('<')[0] + "()"
+                else:
+                    result = splitLine[3].split('(')[0].strip() + "()"
     if (splitLine[0].strip()=="fn"):
             print("5")
             print(splitLine[1])
