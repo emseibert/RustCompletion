@@ -52,11 +52,6 @@ fn complete() {
     }
 }
 
-fn crates() {
-    let arg = std::os::args()[2];
-    std::io::println("in crates: " + arg.trim())
-}
-
 fn prefix() {
     let args = std::os::args().to_owned();
     let linenum = std::uint::parse_bytes(args[2].as_bytes(), 10).unwrap();
@@ -109,7 +104,6 @@ fn main() {
     match command.as_slice() {
         &"prefix" => prefix(),
         &"complete" => complete(),
-        &"crate-sort" => crates(),
         &"find-definition" => find_definition(),
         &"help" => print_usage(),
         _ => { 
