@@ -12,11 +12,9 @@ class AllAutocomplete(sublime_plugin.EventListener):
 
     def on_query_completions(self, view, prefix, locations):
         line = [view.substr(sublime.Region(view.line(l).a, l)) for l in locations]
-        #print("line")
-       # print(line)
         line_1 = line[0]
-        #print("len")
-       # print(str(len(line_1)))
+        if prefix == 'use' and len(line_1)<3:
+            return [('use','use')]
         if len(line_1)>2:
             #Parse line to get all prior use's (let x = aa::bb::cc -> aa::bb)
             res = kfels_parse(prefix, line)
@@ -27,8 +25,6 @@ class AllAutocomplete(sublime_plugin.EventListener):
                 line_1 = view.substr(regions[0]) + '::' + prefix
 
         commandsOnLine = line_1.split(' ')
-        #print("commandsOnLine")
-        #print(commandsOnLine)
         isCrate = ""
         matches = []
 
@@ -52,9 +48,8 @@ class AllAutocomplete(sublime_plugin.EventListener):
 
 def callRacerCrates(s):
     #os.environ['RUST_SRC_PATH'] = "/Users/emilyseibert/rust/src"
-    os.environ['RUST_SRC_PATH'] = str(os.path.join(os.path.dirname(os.path.realpath(__file__)),'rust/src'))
-    #os.environ['RUST_SRC_PATH'] = '/home/student/.config/sublime-text-3/Packages/CS4414FinalProject/rust/src'
-
+    os.environ['RUST_SRC_PATH'] = '/home/student/.config/sublime-text-3/Packages/CS4414FinalProject/rust/src'
+    
     results = []
     for dirs in os.listdir(os.environ['RUST_SRC_PATH']):
         if dirs.find("lib" + s, 0) > -1:
@@ -75,10 +70,9 @@ def kfels_parse(prefix,line):
 
 def callRacer(s):
 
-    os.environ['RUST_SRC_PATH'] = str(os.path.join(os.path.dirname(os.path.realpath(__file__)),'rust/src'))
-    #cmd = "cd /Users/emilyseibert/Library/'Application Support'/'Sublime Text 3'/Packages/CS4414FinalProject/racer/bin/; ./racer complete " + s
-    #cmd = 'cd /home/student/.config/sublime-text-3/Packages/CS4414FinalProject/racer/bin/; ./racer complete ' + s
-    cmd = 'cd '+str(os.path.join(os.path.dirname(os.path.realpath(__file__)),'racer/bin')) +'; ./racer complete ' + s
+    os.environ['RUST_SRC_PATH'] = '/home/student/.config/sublime-text-3/Packages/CS4414FinalProject/rust/src'
+    #cmd = "/Users/emilyseibert/racer/bin/racer complete " + s
+    cmd = 'cd /home/student/.config/sublime-text-3/Packages/CS4414FinalProject/racer/bin/; ./racer complete ' + s
     (stdout, stderr) = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True).communicate()
     results = []
     #print(stdout)
@@ -97,9 +91,17 @@ def callRacer(s):
                 print(test + " is a comment")
                 continue
             print("before: " + line)
+            matched_reg = re.match(r'(?:pub)*(?:\s)*(?:fn|mod)\s*(.*)(?:{|;)', line)
             matched = parseLine(line)
+            matched_full = matched
+            if matched_reg is not None:
+                print("match_reg")
+                matched_full = matched_reg.groups(1)[0]
+                print(matched_full)
+            else:
+                print("NONE")
             print("after: " + matched)
-            t =  (matched, matched)
+            t =  (matched_full, matched)
             
             results.append(t)
             limit += 1
