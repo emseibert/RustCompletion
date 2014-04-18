@@ -18,11 +18,14 @@ class AllAutocomplete(sublime_plugin.EventListener):
         if len(line_1)>2:
             #Parse line to get all prior use's (let x = aa::bb::cc -> aa::bb)
             res = kfels_parse(prefix, line)
-            regions = view.find_all(r'use (.*?)::%s'%res,)
-        
-            if len(regions) is not 0:
-                #print("region: " + view.substr(regions[0]))
-                line_1 = view.substr(regions[0]) + '::' + prefix
+            if res is not '':
+                regions = view.find_all(r'use (.*?)::%s'%res,)
+            
+                if len(regions) is not 0:
+                    #print("region: " + view.substr(regions[0]))
+                    line_1 = view.substr(regions[0]) + '::' + prefix
+                    
+            
 
         commandsOnLine = line_1.split(' ')
         isCrate = ""
@@ -93,7 +96,7 @@ def callRacer(s):
                 #print(test + " is a comment")
                 continue
             #print("before: " + line)
-            matched_reg = re.match(r'(?:pub)*(?:\s)*(?:fn|mod)\s*(.*)(?:{|;)', line)
+            matched_reg = re.match(r'(?:pub)*(?:\s)*(?:fn|mod|struct)\s*(.*)(?:{|;)', line)
             matched = parseLine(line)
             matched_full = matched
             if matched_reg is not None:
