@@ -131,14 +131,15 @@ fn locate_func_in_defn(filepath : &Path, s : &str, def : &str, outputfn : &|Matc
     let mut pt = 0;
     for line_r in BufferedReader::new(file).lines() {
         let line = line_r.unwrap();
+        if ((line.find_str("trait").is_some() == true || line.find_str("struct").is_some()) && found == true) {
+            break;
+        }
         if (line.find_str(" "+ def+ " ").is_some() || line.find_str(" "+ def+ "<").is_some()) {
             found = true;
 
         }
         
-        if ((line.find_str("trait").is_some() == true || line.find_str("struct").is_some()) && found == true) {
-            break;
-        }
+
         if (found==true && line.find_str("///").is_none()==true) {
         line.find_str(fnsearchstr+s).map(|n|{
            let end = find_path_end(line, n+fnsearchstr.len());
@@ -262,6 +263,7 @@ fn locate_defn_in_module(filepath : &Path, s : &str, outputfn : &|Match|) {
 
 fn locate_path_via_module(filepath: &Path, p: &[&str], outputfn: &|Match|) {
     debug!("locate_path_via_module: {} {} ",filepath.as_str(),p);
+    println!("p: {}",p);
     if p.len() == 0 {
         return locate_defn_in_module(filepath, "", outputfn);
     }
@@ -269,9 +271,10 @@ fn locate_path_via_module(filepath: &Path, p: &[&str], outputfn: &|Match|) {
     if p.len() == 1 {
         return locate_defn_in_module(filepath, p[0], outputfn);
     }
-    if p.len() == 3 {
+    if p.len() >= 3 {
         let dir = filepath.dir_path();
-        return locate_func_in_defn(&dir.join(p[0]+".rs"),p[2],p[1],outputfn);
+        println!("end: {} next to end: {}",p[p.len()-1],p[p.len()-2]);
+        return locate_func_in_defn(&dir.join(p[p.]+".rs"),p[p.len()-1],p[p.len()-2],outputfn);
     }
     let file = File::open(filepath);
     if file.is_err() { return }

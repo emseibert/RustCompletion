@@ -40,16 +40,16 @@ class AllAutocomplete(sublime_plugin.EventListener):
         else:
             lineToCall = commandsOnLine[len(commandsOnLine) - 1]
             matches = callRacer(lineToCall)
-        print("lineToCall")
-        print(lineToCall)
+        #print("lineToCall")
+        #print(lineToCall)
         matches_no_dup = without_duplicates(matches)
         return matches_no_dup
 
 
 def callRacerCrates(s):
     #os.environ['RUST_SRC_PATH'] = "/Users/emilyseibert/rust/src"
-    os.environ['RUST_SRC_PATH'] = '/home/student/.config/sublime-text-3/Packages/CS4414FinalProject/rust/src'
-    
+    #os.environ['RUST_SRC_PATH'] = '/home/student/.config/sublime-text-3/Packages/CS4414FinalProject/rust/src'
+    os.environ['RUST_SRC_PATH'] ='/home/student/CS4414FinalProj/rust/src'
     results = []
     for dirs in os.listdir(os.environ['RUST_SRC_PATH']):
         if dirs.find("lib" + s, 0) > -1:
@@ -70,9 +70,11 @@ def kfels_parse(prefix,line):
 
 def callRacer(s):
 
-    os.environ['RUST_SRC_PATH'] = '/home/student/.config/sublime-text-3/Packages/CS4414FinalProject/rust/src'
+    os.environ['RUST_SRC_PATH'] = '/home/student/CS4414FinalProj/rust/src'
+    #os.environ['RUST_SRC_PATH'] = '/home/student/.config/sublime-text-3/Packages/CS4414FinalProject/rust/src'
     #cmd = "/Users/emilyseibert/racer/bin/racer complete " + s
-    cmd = 'cd /home/student/.config/sublime-text-3/Packages/CS4414FinalProject/racer/bin/; ./racer complete ' + s
+    #cmd = 'cd /home/student/.config/sublime-text-3/Packages/CS4414FinalProject/racer/bin/; ./racer complete ' + s
+    cmd = 'cd /home/student/CS4414FinalProj/racer/bin/; ./racer complete ' + s;
     (stdout, stderr) = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True).communicate()
     results = []
     #print(stdout)
@@ -88,19 +90,19 @@ def callRacer(s):
 
             #remove commented code and test functions from results
             if test.startswith('//') or test.startswith('test!('): #remove commented code and test functions
-                print(test + " is a comment")
+                #print(test + " is a comment")
                 continue
-            print("before: " + line)
+            #print("before: " + line)
             matched_reg = re.match(r'(?:pub)*(?:\s)*(?:fn|mod)\s*(.*)(?:{|;)', line)
             matched = parseLine(line)
             matched_full = matched
             if matched_reg is not None:
-                print("match_reg")
+                #print("match_reg")
                 matched_full = matched_reg.groups(1)[0]
-                print(matched_full)
-            else:
-                print("NONE")
-            print("after: " + matched)
+                #print(matched_full)
+            #else:
+                #print("NONE")
+            #print("after: " + matched)
             t =  (matched_full, matched)
             
             results.append(t)
@@ -110,7 +112,7 @@ def callRacer(s):
     return results
 
 def parseLine(line):
-    print (line)
+    #print (line)
     splitLine = line.split(' ')
     result = line
    # print(splitLine)
