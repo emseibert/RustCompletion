@@ -274,7 +274,7 @@ fn locate_path_via_module(filepath: &Path, p: &[&str], outputfn: &|Match|) {
     if p.len() >= 3 {
         let dir = filepath.dir_path();
         println!("end: {} next to end: {}",p[p.len()-1],p[p.len()-2]);
-        return locate_func_in_defn(&dir.join(p[p.]+".rs"),p[p.len()-1],p[p.len()-2],outputfn);
+        return locate_func_in_defn(&dir.join(p[0]+".rs"),p[p.len()-1],p[p.len()-2],outputfn);
     }
     let file = File::open(filepath);
     if file.is_err() { return }
