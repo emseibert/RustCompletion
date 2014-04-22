@@ -151,13 +151,6 @@ def without_duplicates(words):
         if w not in result:
             result.append(w)
     return result
- + "()"
-    if (splitLine[1].strip()=="fn"):
-            if splitLine[2].find('<') > -1:
-                result = splitLine[2].strip().split('<')[0] + "()"
-            else:
-                result = splitLine[2].split('(')[0].strip() + "()"
-    return result 
 
 # keeps first instance of every word and retains the original order
 def without_duplicates(words):
