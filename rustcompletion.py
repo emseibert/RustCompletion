@@ -52,7 +52,7 @@ class AllAutocomplete(sublime_plugin.EventListener):
 def callRacerCrates(s):
     #os.environ['RUST_SRC_PATH'] = "/Users/emilyseibert/rust/src"
     #os.environ['RUST_SRC_PATH'] = '/home/student/.config/sublime-text-3/Packages/CS4414FinalProject/rust/src'
-    os.environ['RUST_SRC_PATH'] ='/home/student/CS4414FinalProj/rust/src'
+    #os.environ['RUST_SRC_PATH'] ='/home/student/CS4414FinalProj/rust/src'
     results = []
     for dirs in os.listdir(os.environ['RUST_SRC_PATH']):
         if dirs.find("lib" + s, 0) > -1:
@@ -73,11 +73,11 @@ def kfels_parse(prefix,line):
 
 def callRacer(s):
 
-    os.environ['RUST_SRC_PATH'] = '/home/student/CS4414FinalProj/rust/src'
+    #os.environ['RUST_SRC_PATH'] = '/home/student/CS4414FinalProj/rust/src'
     #os.environ['RUST_SRC_PATH'] = '/home/student/.config/sublime-text-3/Packages/CS4414FinalProject/rust/src'
-    #cmd = "/Users/emilyseibert/racer/bin/racer complete " + s
+    cmd = "/Users/emilyseibert/Library/'Application Support'/'Sublime Text 3'/Packages/CS4414FinalProject/racer/bin/; ./racer complete " + s
     #cmd = 'cd /home/student/.config/sublime-text-3/Packages/CS4414FinalProject/racer/bin/; ./racer complete ' + s
-    cmd = 'cd /home/student/CS4414FinalProj/racer/bin/; ./racer complete ' + s;
+    #cmd = 'cd /home/student/CS4414FinalProj/racer/bin/; ./racer complete ' + s;
     (stdout, stderr) = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True).communicate()
     results = []
     #print(stdout)
