@@ -569,8 +569,3 @@ pub fn do_search(path: &[&str], fpath: &Path, pos: uint, outputfn: &|Match|) {
         (*outputfn)(m);
     }
 }
-                       linetxt: ~"std::",
-                       mtype: Crate};
-        (*outputfn)(m);
-    }
-}

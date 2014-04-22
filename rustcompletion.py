@@ -70,9 +70,11 @@ def kfels_parse(prefix,line):
 
 def callRacer(s):
     rust_src = str(os.path.join(os.path.dirname(os.path.realpath(__file__)), 'rust_src'))
+    #rust_src = "/Users/emilyseibert/rust/src"
     cmd_loc = str(os.path.join(os.path.dirname(os.path.realpath(__file__)), 'racer/bin'))
 
     cmd = 'cd "' + cmd_loc + '"; ./racer complete "' + rust_src + '" '+ s
+    print(cmd)
     (stdout, stderr) = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True).communicate()
     results = []
     limit = 0
