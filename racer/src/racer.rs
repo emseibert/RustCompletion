@@ -262,8 +262,8 @@ fn locate_defn_in_module(filepath : &Path, s : &str, outputfn : &|Match|) {
 }
 
 fn locate_path_via_module(filepath: &Path, p: &[&str], outputfn: &|Match|) {
-    debug!("locate_path_via_module: {} {} ",filepath.as_str(),p);
-    println!("p: {}",p);
+    //println!("locate_path_via_module: {} {} ",filepath.as_str(),p);
+    //println!("p: {}",p);
     if p.len() == 0 {
         return locate_defn_in_module(filepath, "", outputfn);
     }
@@ -315,18 +315,15 @@ fn search_lines(filepath: &Path, f:|~str| ) {
         f(line.unwrap());
     }
 }
-pub fn find_crate(s: ~str,outputfn : &|Match|) {
-    let srcpaths = std::os::getenv("RUST_SRC_PATH").unwrap();
 
-}
 pub fn locate_abs_path(p : &[&str], outputfn : &|Match|) {
-    let srcpaths = std::os::getenv("RUST_SRC_PATH").unwrap();
+    let srcpaths = std::os::getenv("RUST_SRC").unwrap();
     let cratename = p[0];
     
     let v: Vec<&str> = srcpaths.split_str(":").collect();
     let v = v.append_one(".");
     for srcpath in v.move_iter() {
-        //println!("PHIL searching srcpath: {}",srcpath);
+       // println!("PHIL searching srcpath: {}",srcpath);
         {
             // try lib<cratename>/lib.rs, like in the rust source dir
             let cratelibname = "lib" + cratename;
@@ -567,6 +564,11 @@ pub fn do_search(path: &[&str], fpath: &Path, pos: uint, outputfn: &|Match|) {
         let m = Match {matchstr: ~"std::",
                        filepath: fpath.clone(),
                        point: 1,
+                       linetxt: ~"std::",
+                       mtype: Crate};
+        (*outputfn)(m);
+    }
+}
                        linetxt: ~"std::",
                        mtype: Crate};
         (*outputfn)(m);

@@ -48,13 +48,10 @@ class AllAutocomplete(sublime_plugin.EventListener):
         matches_no_dup = without_duplicates(matches)
         return matches_no_dup
 
-
 def callRacerCrates(s):
-    #os.environ['RUST_SRC_PATH'] = "/Users/emilyseibert/rust/src"
-    #os.environ['RUST_SRC_PATH'] = '/home/student/.config/sublime-text-3/Packages/CS4414FinalProject/rust/src'
-    #os.environ['RUST_SRC_PATH'] ='/home/student/CS4414FinalProj/rust/src'
+    RUST_SRC = str(os.path.join(os.path.dirname(os.path.realpath(__file__)), 'rust_src'))
     results = []
-    for dirs in os.listdir(os.environ['RUST_SRC_PATH']):
+    for dirs in os.listdir(RUST_SRC):
         if dirs.find("lib" + s, 0) > -1:
             r = (dirs.split('lib')[1] + ";", dirs.split('lib')[1] + ";")
             results.append(r)
@@ -72,15 +69,12 @@ def kfels_parse(prefix,line):
     return new_prefix
 
 def callRacer(s):
+    rust_src = str(os.path.join(os.path.dirname(os.path.realpath(__file__)), 'rust_src'))
+    cmd_loc = str(os.path.join(os.path.dirname(os.path.realpath(__file__)), 'racer/bin'))
 
-    #os.environ['RUST_SRC_PATH'] = '/home/student/CS4414FinalProj/rust/src'
-    #os.environ['RUST_SRC_PATH'] = '/home/student/.config/sublime-text-3/Packages/CS4414FinalProject/rust/src'
-    cmd = "/Users/emilyseibert/Library/'Application Support'/'Sublime Text 3'/Packages/CS4414FinalProject/racer/bin/; ./racer complete " + s
-    #cmd = 'cd /home/student/.config/sublime-text-3/Packages/CS4414FinalProject/racer/bin/; ./racer complete ' + s
-    #cmd = 'cd /home/student/CS4414FinalProj/racer/bin/; ./racer complete ' + s;
+    cmd = 'cd "' + cmd_loc + '"; ./racer complete "' + rust_src + '" '+ s
     (stdout, stderr) = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True).communicate()
     results = []
-    #print(stdout)
     limit = 0
     for line in stdout.splitlines():
         if limit > 5:
@@ -143,6 +137,21 @@ def parseLine(line):
                 result = splitLine[1].strip().split('<')[0] + "()"
             else:
                 result = splitLine[1].split('(')[0].strip() + "()"
+    if (splitLine[1].strip()=="fn"):
+            if splitLine[2].find('<') > -1:
+                result = splitLine[2].strip().split('<')[0] + "()"
+            else:
+                result = splitLine[2].split('(')[0].strip() + "()"
+    return result 
+
+# keeps first instance of every word and retains the original order
+def without_duplicates(words):
+    result = []
+    for w in words:
+        if w not in result:
+            result.append(w)
+    return result
+ + "()"
     if (splitLine[1].strip()=="fn"):
             if splitLine[2].find('<') > -1:
                 result = splitLine[2].strip().split('<')[0] + "()"

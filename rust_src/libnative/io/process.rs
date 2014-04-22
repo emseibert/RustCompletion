@@ -1,0 +1,877 @@
+// Copyright 2012-2013 The Rust Project Developers. See the COPYRIGHT
+// file at the top-level directory of this distribution and at
+// http://rust-lang.org/COPYRIGHT.
+//
+// Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
+// http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
+// <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
+// option. This file may not be copied, modified, or distributed
+// except according to those terms.
+
+use std::io;
+use libc::{pid_t, c_void, c_int};
+use libc;
+use std::os;
+use std::ptr;
+use std::rt::rtio;
+use p = std::io::process;
+
+use super::IoResult;
+use super::file;
+
+#[cfg(windows)] use std::cast;
+#[cfg(windows)] use std::strbuf::StrBuf;
+#[cfg(not(windows))] use super::retry;
+
+/**
+ * A value representing a child process.
+ *
+ * The lifetime of this value is linked to the lifetime of the actual
+ * process - the Process destructor calls self.finish() which waits
+ * for the process to terminate.
+ */
+pub struct Process {
+    /// The unique id of the process (this should never be negative).
+    pid: pid_t,
+
+    /// A handle to the process - on unix this will always be NULL, but on
+    /// windows it will be a HANDLE to the process, which will prevent the
+    /// pid being re-used until the handle is closed.
+    handle: *(),
+
+    /// None until finish() is called.
+    exit_code: Option<p::ProcessExit>,
+
+    /// Manually delivered signal
+    exit_signal: Option<int>,
+}
+
+impl Process {
+    /// Creates a new process using native process-spawning abilities provided
+    /// by the OS. Operations on this process will be blocking instead of using
+    /// the runtime for sleeping just this current task.
+    ///
+    /// # Arguments
+    ///
+    /// * prog - the program to run
+    /// * args - the arguments to pass to the program, not including the program
+    ///          itself
+    /// * env - an optional environment to specify for the child process. If
+    ///         this value is `None`, then the child will inherit the parent's
+    ///         environment
+    /// * cwd - an optionally specified current working directory of the child,
+    ///         defaulting to the parent's current working directory
+    /// * stdin, stdout, stderr - These optionally specified file descriptors
+    ///     dictate where the stdin/out/err of the child process will go. If
+    ///     these are `None`, then this module will bind the input/output to an
+    ///     os pipe instead. This process takes ownership of these file
+    ///     descriptors, closing them upon destruction of the process.
+    pub fn spawn(config: p::ProcessConfig)
+        -> Result<(Process, ~[Option<file::FileDesc>]), io::IoError>
+    {
+        // right now we only handle stdin/stdout/stderr.
+        if config.extra_io.len() > 0 {
+            return Err(super::unimpl());
+        }
+
+        fn get_io(io: p::StdioContainer, ret: &mut ~[Option<file::FileDesc>])
+            -> (Option<os::Pipe>, c_int)
+        {
+            match io {
+                p::Ignored => { ret.push(None); (None, -1) }
+                p::InheritFd(fd) => { ret.push(None); (None, fd) }
+                p::CreatePipe(readable, _writable) => {
+                    let pipe = os::pipe();
+                    let (theirs, ours) = if readable {
+                        (pipe.input, pipe.out)
+                    } else {
+                        (pipe.out, pipe.input)
+                    };
+                    ret.push(Some(file::FileDesc::new(ours, true)));
+                    (Some(pipe), theirs)
+                }
+            }
+        }
+
+        let mut ret_io = ~[];
+        let (in_pipe, in_fd) = get_io(config.stdin, &mut ret_io);
+        let (out_pipe, out_fd) = get_io(config.stdout, &mut ret_io);
+        let (err_pipe, err_fd) = get_io(config.stderr, &mut ret_io);
+
+        let env = config.env.map(|a| a.to_owned());
+        let cwd = config.cwd.map(|a| Path::new(a));
+        let res = spawn_process_os(config, env, cwd.as_ref(), in_fd, out_fd,
+                                   err_fd);
+
+        unsafe {
+            for pipe in in_pipe.iter() { let _ = libc::close(pipe.input); }
+            for pipe in out_pipe.iter() { let _ = libc::close(pipe.out); }
+            for pipe in err_pipe.iter() { let _ = libc::close(pipe.out); }
+        }
+
+        match res {
+            Ok(res) => {
+                Ok((Process {
+                        pid: res.pid,
+                        handle: res.handle,
+                        exit_code: None,
+                        exit_signal: None,
+                    },
+                    ret_io))
+            }
+            Err(e) => Err(e)
+        }
+    }
+
+    pub fn kill(pid: libc::pid_t, signum: int) -> IoResult<()> {
+        unsafe { killpid(pid, signum) }
+    }
+}
+
+impl rtio::RtioProcess for Process {
+    fn id(&self) -> pid_t { self.pid }
+
+    fn wait(&mut self) -> p::ProcessExit {
+        match self.exit_code {
+            Some(code) => code,
+            None => {
+                let code = waitpid(self.pid);
+                // On windows, waitpid will never return a signal. If a signal
+                // was successfully delivered to the process, however, we can
+                // consider it as having died via a signal.
+                let code = match self.exit_signal {
+                    None => code,
+                    Some(signal) if cfg!(windows) => p::ExitSignal(signal),
+                    Some(..) => code,
+                };
+                self.exit_code = Some(code);
+                code
+            }
+        }
+    }
+
+    fn kill(&mut self, signum: int) -> Result<(), io::IoError> {
+        // On linux (and possibly other unices), a process that has exited will
+        // continue to accept signals because it is "defunct". The delivery of
+        // signals will only fail once the child has been reaped. For this
+        // reason, if the process hasn't exited yet, then we attempt to collect
+        // their status with WNOHANG.
+        if self.exit_code.is_none() {
+            match waitpid_nowait(self.pid) {
+                Some(code) => { self.exit_code = Some(code); }
+                None => {}
+            }
+        }
+
+        // if the process has finished, and therefore had waitpid called,
+        // and we kill it, then on unix we might ending up killing a
+        // newer process that happens to have the same (re-used) id
+        match self.exit_code {
+            Some(..) => return Err(io::IoError {
+                kind: io::OtherIoError,
+                desc: "can't kill an exited process",
+                detail: None,
+            }),
+            None => {}
+        }
+
+        // A successfully delivered signal that isn't 0 (just a poll for being
+        // alive) is recorded for windows (see wait())
+        match unsafe { killpid(self.pid, signum) } {
+            Ok(()) if signum == 0 => Ok(()),
+            Ok(()) => { self.exit_signal = Some(signum); Ok(()) }
+            Err(e) => Err(e),
+        }
+    }
+}
+
+impl Drop for Process {
+    fn drop(&mut self) {
+        free_handle(self.handle);
+    }
+}
+
+#[cfg(windows)]
+unsafe fn killpid(pid: pid_t, signal: int) -> Result<(), io::IoError> {
+    let handle = libc::OpenProcess(libc::PROCESS_TERMINATE |
+                                   libc::PROCESS_QUERY_INFORMATION,
+                                   libc::FALSE, pid as libc::DWORD);
+    if handle.is_null() {
+        return Err(super::last_error())
+    }
+    let ret = match signal {
+        // test for existence on signal 0
+        0 => {
+            let mut status = 0;
+            let ret = libc::GetExitCodeProcess(handle, &mut status);
+            if ret == 0 {
+                Err(super::last_error())
+            } else if status != libc::STILL_ACTIVE {
+                Err(io::IoError {
+                    kind: io::OtherIoError,
+                    desc: "process no longer alive",
+                    detail: None,
+                })
+            } else {
+                Ok(())
+            }
+        }
+        io::process::PleaseExitSignal | io::process::MustDieSignal => {
+            let ret = libc::TerminateProcess(handle, 1);
+            super::mkerr_winbool(ret)
+        }
+        _ => Err(io::IoError {
+            kind: io::OtherIoError,
+            desc: "unsupported signal on windows",
+            detail: None,
+        })
+    };
+    let _ = libc::CloseHandle(handle);
+    return ret;
+}
+
+#[cfg(not(windows))]
+unsafe fn killpid(pid: pid_t, signal: int) -> Result<(), io::IoError> {
+    let r = libc::funcs::posix88::signal::kill(pid, signal as c_int);
+    super::mkerr_libc(r)
+}
+
+struct SpawnProcessResult {
+    pid: pid_t,
+    handle: *(),
+}
+
+#[cfg(windows)]
+fn spawn_process_os(config: p::ProcessConfig,
+                    env: Option<~[(~str, ~str)]>,
+                    dir: Option<&Path>,
+                    in_fd: c_int, out_fd: c_int,
+                    err_fd: c_int) -> IoResult<SpawnProcessResult> {
+    use libc::types::os::arch::extra::{DWORD, HANDLE, STARTUPINFO};
+    use libc::consts::os::extra::{
+        TRUE, FALSE,
+        STARTF_USESTDHANDLES,
+        INVALID_HANDLE_VALUE,
+        DUPLICATE_SAME_ACCESS
+    };
+    use libc::funcs::extra::kernel32::{
+        GetCurrentProcess,
+        DuplicateHandle,
+        CloseHandle,
+        CreateProcessA
+    };
+    use libc::funcs::extra::msvcrt::get_osfhandle;
+
+    use std::mem;
+
+    if config.gid.is_some() || config.uid.is_some() {
+        return Err(io::IoError {
+            kind: io::OtherIoError,
+            desc: "unsupported gid/uid requested on windows",
+            detail: None,
+        })
+    }
+
+    unsafe {
+
+        let mut si = zeroed_startupinfo();
+        si.cb = mem::size_of::<STARTUPINFO>() as DWORD;
+        si.dwFlags = STARTF_USESTDHANDLES;
+
+        let cur_proc = GetCurrentProcess();
+
+        if in_fd != -1 {
+            let orig_std_in = get_osfhandle(in_fd) as HANDLE;
+            if orig_std_in == INVALID_HANDLE_VALUE as HANDLE {
+                fail!("failure in get_osfhandle: {}", os::last_os_error());
+            }
+            if DuplicateHandle(cur_proc, orig_std_in, cur_proc, &mut si.hStdInput,
+                               0, TRUE, DUPLICATE_SAME_ACCESS) == FALSE {
+                fail!("failure in DuplicateHandle: {}", os::last_os_error());
+            }
+        }
+
+        if out_fd != -1 {
+            let orig_std_out = get_osfhandle(out_fd) as HANDLE;
+            if orig_std_out == INVALID_HANDLE_VALUE as HANDLE {
+                fail!("failure in get_osfhandle: {}", os::last_os_error());
+            }
+            if DuplicateHandle(cur_proc, orig_std_out, cur_proc, &mut si.hStdOutput,
+                               0, TRUE, DUPLICATE_SAME_ACCESS) == FALSE {
+                fail!("failure in DuplicateHandle: {}", os::last_os_error());
+            }
+        }
+
+        if err_fd != -1 {
+            let orig_std_err = get_osfhandle(err_fd) as HANDLE;
+            if orig_std_err == INVALID_HANDLE_VALUE as HANDLE {
+                fail!("failure in get_osfhandle: {}", os::last_os_error());
+            }
+            if DuplicateHandle(cur_proc, orig_std_err, cur_proc, &mut si.hStdError,
+                               0, TRUE, DUPLICATE_SAME_ACCESS) == FALSE {
+                fail!("failure in DuplicateHandle: {}", os::last_os_error());
+            }
+        }
+
+        let cmd = make_command_line(config.program, config.args);
+        let mut pi = zeroed_process_information();
+        let mut create_err = None;
+
+        // stolen from the libuv code.
+        let mut flags = 0;
+        if config.detach {
+            flags |= libc::DETACHED_PROCESS | libc::CREATE_NEW_PROCESS_GROUP;
+        }
+
+        with_envp(env, |envp| {
+            with_dirp(dir, |dirp| {
+                cmd.with_c_str(|cmdp| {
+                    let created = CreateProcessA(ptr::null(), cast::transmute(cmdp),
+                                                 ptr::mut_null(), ptr::mut_null(), TRUE,
+                                                 flags, envp, dirp, &mut si,
+                                                 &mut pi);
+                    if created == FALSE {
+                        create_err = Some(super::last_error());
+                    }
+                })
+            })
+        });
+
+        if in_fd != -1 { assert!(CloseHandle(si.hStdInput) != 0); }
+        if out_fd != -1 { assert!(CloseHandle(si.hStdOutput) != 0); }
+        if err_fd != -1 { assert!(CloseHandle(si.hStdError) != 0); }
+
+        match create_err {
+            Some(err) => return Err(err),
+            None => {}
+        }
+
+        // We close the thread handle because we don't care about keeping the
+        // thread id valid, and we aren't keeping the thread handle around to be
+        // able to close it later. We don't close the process handle however
+        // because std::we want the process id to stay valid at least until the
+        // calling code closes the process handle.
+        assert!(CloseHandle(pi.hThread) != 0);
+
+        Ok(SpawnProcessResult {
+            pid: pi.dwProcessId as pid_t,
+            handle: pi.hProcess as *()
+        })
+    }
+}
+
+#[cfg(windows)]
+fn zeroed_startupinfo() -> libc::types::os::arch::extra::STARTUPINFO {
+    libc::types::os::arch::extra::STARTUPINFO {
+        cb: 0,
+        lpReserved: ptr::mut_null(),
+        lpDesktop: ptr::mut_null(),
+        lpTitle: ptr::mut_null(),
+        dwX: 0,
+        dwY: 0,
+        dwXSize: 0,
+        dwYSize: 0,
+        dwXCountChars: 0,
+        dwYCountCharts: 0,
+        dwFillAttribute: 0,
+        dwFlags: 0,
+        wShowWindow: 0,
+        cbReserved2: 0,
+        lpReserved2: ptr::mut_null(),
+        hStdInput: ptr::mut_null(),
+        hStdOutput: ptr::mut_null(),
+        hStdError: ptr::mut_null()
+    }
+}
+
+#[cfg(windows)]
+fn zeroed_process_information() -> libc::types::os::arch::extra::PROCESS_INFORMATION {
+    libc::types::os::arch::extra::PROCESS_INFORMATION {
+        hProcess: ptr::mut_null(),
+        hThread: ptr::mut_null(),
+        dwProcessId: 0,
+        dwThreadId: 0
+    }
+}
+
+#[cfg(windows)]
+fn make_command_line(prog: &str, args: &[~str]) -> ~str {
+    let mut cmd = StrBuf::new();
+    append_arg(&mut cmd, prog);
+    for arg in args.iter() {
+        cmd.push_char(' ');
+        append_arg(&mut cmd, *arg);
+    }
+    return cmd.into_owned();
+
+    fn append_arg(cmd: &mut StrBuf, arg: &str) {
+        let quote = arg.chars().any(|c| c == ' ' || c == '\t');
+        if quote {
+            cmd.push_char('"');
+        }
+        for i in range(0u, arg.len()) {
+            append_char_at(cmd, arg, i);
+        }
+        if quote {
+            cmd.push_char('"');
+        }
+    }
+
+    fn append_char_at(cmd: &mut StrBuf, arg: &str, i: uint) {
+        match arg[i] as char {
+            '"' => {
+                // Escape quotes.
+                cmd.push_str("\\\"");
+            }
+            '\\' => {
+                if backslash_run_ends_in_quote(arg, i) {
+                    // Double all backslashes that are in runs before quotes.
+                    cmd.push_str("\\\\");
+                } else {
+                    // Pass other backslashes through unescaped.
+                    cmd.push_char('\\');
+                }
+            }
+            c => {
+                cmd.push_char(c);
+            }
+        }
+    }
+
+    fn backslash_run_ends_in_quote(s: &str, mut i: uint) -> bool {
+        while i < s.len() && s[i] as char == '\\' {
+            i += 1;
+        }
+        return i < s.len() && s[i] as char == '"';
+    }
+}
+
+#[cfg(unix)]
+fn spawn_process_os(config: p::ProcessConfig,
+                    env: Option<~[(~str, ~str)]>,
+                    dir: Option<&Path>,
+                    in_fd: c_int, out_fd: c_int,
+                    err_fd: c_int) -> IoResult<SpawnProcessResult> {
+    use libc::funcs::posix88::unistd::{fork, dup2, close, chdir, execvp};
+    use libc::funcs::bsd44::getdtablesize;
+    use libc::c_ulong;
+
+    mod rustrt {
+        extern {
+            pub fn rust_unset_sigprocmask();
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    unsafe fn set_environ(envp: *c_void) {
+        extern { fn _NSGetEnviron() -> *mut *c_void; }
+
+        *_NSGetEnviron() = envp;
+    }
+    #[cfg(not(target_os = "macos"))]
+    unsafe fn set_environ(envp: *c_void) {
+        extern { static mut environ: *c_void; }
+        environ = envp;
+    }
+
+    unsafe fn set_cloexec(fd: c_int) {
+        extern { fn ioctl(fd: c_int, req: c_ulong) -> c_int; }
+
+        #[cfg(target_os = "macos")]
+        #[cfg(target_os = "freebsd")]
+        static FIOCLEX: c_ulong = 0x20006601;
+        #[cfg(target_os = "linux")]
+        #[cfg(target_os = "android")]
+        static FIOCLEX: c_ulong = 0x5451;
+
+        let ret = ioctl(fd, FIOCLEX);
+        assert_eq!(ret, 0);
+    }
+
+    let dirp = dir.map(|p| p.to_c_str());
+    let dirp = dirp.as_ref().map(|c| c.with_ref(|p| p)).unwrap_or(ptr::null());
+
+    with_envp(env, proc(envp) {
+        with_argv(config.program, config.args, proc(argv) unsafe {
+            let pipe = os::pipe();
+            let mut input = file::FileDesc::new(pipe.input, true);
+            let mut output = file::FileDesc::new(pipe.out, true);
+
+            set_cloexec(output.fd());
+
+            let pid = fork();
+            if pid < 0 {
+                fail!("failure in fork: {}", os::last_os_error());
+            } else if pid > 0 {
+                drop(output);
+                let mut bytes = [0, ..4];
+                return match input.inner_read(bytes) {
+                    Ok(4) => {
+                        let errno = (bytes[0] << 24) as i32 |
+                                    (bytes[1] << 16) as i32 |
+                                    (bytes[2] <<  8) as i32 |
+                                    (bytes[3] <<  0) as i32;
+                        Err(io::IoError::from_errno(errno as uint, false))
+                    }
+                    Err(e) => {
+                        assert!(e.kind == io::BrokenPipe ||
+                                e.kind == io::EndOfFile,
+                                "unexpected error: {}", e);
+                        Ok(SpawnProcessResult {
+                            pid: pid,
+                            handle: ptr::null()
+                        })
+                    }
+                    Ok(..) => fail!("short read on the cloexec pipe"),
+                };
+            }
+            // And at this point we've reached a special time in the life of the
+            // child. The child must now be considered hamstrung and unable to
+            // do anything other than syscalls really. Consider the following
+            // scenario:
+            //
+            //      1. Thread A of process 1 grabs the malloc() mutex
+            //      2. Thread B of process 1 forks(), creating thread C
+            //      3. Thread C of process 2 then attempts to malloc()
+            //      4. The memory of process 2 is the same as the memory of
+            //         process 1, so the mutex is locked.
+            //
+            // This situation looks a lot like deadlock, right? It turns out
+            // that this is what pthread_atfork() takes care of, which is
+            // presumably implemented across platforms. The first thing that
+            // threads to *before* forking is to do things like grab the malloc
+            // mutex, and then after the fork they unlock it.
+            //
+            // Despite this information, libnative's spawn has been witnessed to
+            // deadlock on both OSX and FreeBSD. I'm not entirely sure why, but
+            // all collected backtraces point at malloc/free traffic in the
+            // child spawned process.
+            //
+            // For this reason, the block of code below should contain 0
+            // invocations of either malloc of free (or their related friends).
+            //
+            // As an example of not having malloc/free traffic, we don't close
+            // this file descriptor by dropping the FileDesc (which contains an
+            // allocation). Instead we just close it manually. This will never
+            // have the drop glue anyway because this code never returns (the
+            // child will either exec() or invoke libc::exit)
+            let _ = libc::close(input.fd());
+
+            fn fail(output: &mut file::FileDesc) -> ! {
+                let errno = os::errno();
+                let bytes = [
+                    (errno << 24) as u8,
+                    (errno << 16) as u8,
+                    (errno <<  8) as u8,
+                    (errno <<  0) as u8,
+                ];
+                assert!(output.inner_write(bytes).is_ok());
+                unsafe { libc::_exit(1) }
+            }
+
+            rustrt::rust_unset_sigprocmask();
+
+            if in_fd == -1 {
+                let _ = libc::close(libc::STDIN_FILENO);
+            } else if retry(|| dup2(in_fd, 0)) == -1 {
+                fail(&mut output);
+            }
+            if out_fd == -1 {
+                let _ = libc::close(libc::STDOUT_FILENO);
+            } else if retry(|| dup2(out_fd, 1)) == -1 {
+                fail(&mut output);
+            }
+            if err_fd == -1 {
+                let _ = libc::close(libc::STDERR_FILENO);
+            } else if retry(|| dup2(err_fd, 2)) == -1 {
+                fail(&mut output);
+            }
+            // close all other fds
+            for fd in range(3, getdtablesize()).rev() {
+                if fd != output.fd() {
+                    let _ = close(fd as c_int);
+                }
+            }
+
+            match config.gid {
+                Some(u) => {
+                    if libc::setgid(u as libc::gid_t) != 0 {
+                        fail(&mut output);
+                    }
+                }
+                None => {}
+            }
+            match config.uid {
+                Some(u) => {
+                    // When dropping privileges from root, the `setgroups` call will
+                    // remove any extraneous groups. If we don't call this, then
+                    // even though our uid has dropped, we may still have groups
+                    // that enable us to do super-user things. This will fail if we
+                    // aren't root, so don't bother checking the return value, this
+                    // is just done as an optimistic privilege dropping function.
+                    extern {
+                        fn setgroups(ngroups: libc::c_int,
+                                     ptr: *libc::c_void) -> libc::c_int;
+                    }
+                    let _ = setgroups(0, 0 as *libc::c_void);
+
+                    if libc::setuid(u as libc::uid_t) != 0 {
+                        fail(&mut output);
+                    }
+                }
+                None => {}
+            }
+            if config.detach {
+                // Don't check the error of setsid because it fails if we're the
+                // process leader already. We just forked so it shouldn't return
+                // error, but ignore it anyway.
+                let _ = libc::setsid();
+            }
+            if !dirp.is_null() && chdir(dirp) == -1 {
+                fail(&mut output);
+            }
+            if !envp.is_null() {
+                set_environ(envp);
+            }
+            let _ = execvp(*argv, argv);
+            fail(&mut output);
+        })
+    })
+}
+
+#[cfg(unix)]
+fn with_argv<T>(prog: &str, args: &[~str], cb: proc(**libc::c_char) -> T) -> T {
+    use std::slice;
+
+    // We can't directly convert `str`s into `*char`s, as someone needs to hold
+    // a reference to the intermediary byte buffers. So first build an array to
+    // hold all the ~[u8] byte strings.
+    let mut tmps = slice::with_capacity(args.len() + 1);
+
+    tmps.push(prog.to_c_str());
+
+    for arg in args.iter() {
+        tmps.push(arg.to_c_str());
+    }
+
+    // Next, convert each of the byte strings into a pointer. This is
+    // technically unsafe as the caller could leak these pointers out of our
+    // scope.
+    let mut ptrs: Vec<_> = tmps.iter().map(|tmp| tmp.with_ref(|buf| buf)).collect();
+
+    // Finally, make sure we add a null pointer.
+    ptrs.push(ptr::null());
+
+    cb(ptrs.as_ptr())
+}
+
+#[cfg(unix)]
+fn with_envp<T>(env: Option<~[(~str, ~str)]>, cb: proc(*c_void) -> T) -> T {
+    use std::slice;
+
+    // On posixy systems we can pass a char** for envp, which is a
+    // null-terminated array of "k=v\n" strings. Like `with_argv`, we have to
+    // have a temporary buffer to hold the intermediary `~[u8]` byte strings.
+    match env {
+        Some(env) => {
+            let mut tmps = slice::with_capacity(env.len());
+
+            for pair in env.iter() {
+                let kv = format!("{}={}", *pair.ref0(), *pair.ref1());
+                tmps.push(kv.to_c_str());
+            }
+
+            // Once again, this is unsafe.
+            let mut ptrs: Vec<*libc::c_char> = tmps.iter()
+                                                   .map(|tmp| tmp.with_ref(|buf| buf))
+                                                   .collect();
+            ptrs.push(ptr::null());
+
+            cb(ptrs.as_ptr() as *c_void)
+        }
+        _ => cb(ptr::null())
+    }
+}
+
+#[cfg(windows)]
+fn with_envp<T>(env: Option<~[(~str, ~str)]>, cb: |*mut c_void| -> T) -> T {
+    // On win32 we pass an "environment block" which is not a char**, but
+    // rather a concatenation of null-terminated k=v\0 sequences, with a final
+    // \0 to terminate.
+    match env {
+        Some(env) => {
+            let mut blk = ~[];
+
+            for pair in env.iter() {
+                let kv = format!("{}={}", *pair.ref0(), *pair.ref1());
+                blk.push_all(kv.as_bytes());
+                blk.push(0);
+            }
+
+            blk.push(0);
+
+            cb(blk.as_mut_ptr() as *mut c_void)
+        }
+        _ => cb(ptr::mut_null())
+    }
+}
+
+#[cfg(windows)]
+fn with_dirp<T>(d: Option<&Path>, cb: |*libc::c_char| -> T) -> T {
+    match d {
+      Some(dir) => dir.with_c_str(|buf| cb(buf)),
+      None => cb(ptr::null())
+    }
+}
+
+#[cfg(windows)]
+fn free_handle(handle: *()) {
+    assert!(unsafe {
+        libc::CloseHandle(cast::transmute(handle)) != 0
+    })
+}
+
+#[cfg(unix)]
+fn free_handle(_handle: *()) {
+    // unix has no process handle object, just a pid
+}
+
+#[cfg(unix)]
+fn translate_status(status: c_int) -> p::ProcessExit {
+    #[cfg(target_os = "linux")]
+    #[cfg(target_os = "android")]
+    mod imp {
+        pub fn WIFEXITED(status: i32) -> bool { (status & 0xff) == 0 }
+        pub fn WEXITSTATUS(status: i32) -> i32 { (status >> 8) & 0xff }
+        pub fn WTERMSIG(status: i32) -> i32 { status & 0x7f }
+    }
+
+    #[cfg(target_os = "macos")]
+    #[cfg(target_os = "freebsd")]
+    mod imp {
+        pub fn WIFEXITED(status: i32) -> bool { (status & 0x7f) == 0 }
+        pub fn WEXITSTATUS(status: i32) -> i32 { status >> 8 }
+        pub fn WTERMSIG(status: i32) -> i32 { status & 0o177 }
+    }
+
+    if imp::WIFEXITED(status) {
+        p::ExitStatus(imp::WEXITSTATUS(status) as int)
+    } else {
+        p::ExitSignal(imp::WTERMSIG(status) as int)
+    }
+}
+
+/**
+ * Waits for a process to exit and returns the exit code, failing
+ * if there is no process with the specified id.
+ *
+ * Note that this is private to avoid race conditions on unix where if
+ * a user calls waitpid(some_process.get_id()) then some_process.finish()
+ * and some_process.destroy() and some_process.finalize() will then either
+ * operate on a none-existent process or, even worse, on a newer process
+ * with the same id.
+ */
+fn waitpid(pid: pid_t) -> p::ProcessExit {
+    return waitpid_os(pid);
+
+    #[cfg(windows)]
+    fn waitpid_os(pid: pid_t) -> p::ProcessExit {
+        use libc::types::os::arch::extra::DWORD;
+        use libc::consts::os::extra::{
+            SYNCHRONIZE,
+            PROCESS_QUERY_INFORMATION,
+            FALSE,
+            STILL_ACTIVE,
+            INFINITE,
+            WAIT_FAILED
+        };
+        use libc::funcs::extra::kernel32::{
+            OpenProcess,
+            GetExitCodeProcess,
+            CloseHandle,
+            WaitForSingleObject
+        };
+
+        unsafe {
+
+            let process = OpenProcess(SYNCHRONIZE | PROCESS_QUERY_INFORMATION,
+                                      FALSE,
+                                      pid as DWORD);
+            if process.is_null() {
+                fail!("failure in OpenProcess: {}", os::last_os_error());
+            }
+
+            loop {
+                let mut status = 0;
+                if GetExitCodeProcess(process, &mut status) == FALSE {
+                    assert!(CloseHandle(process) != 0);
+                    fail!("failure in GetExitCodeProcess: {}", os::last_os_error());
+                }
+                if status != STILL_ACTIVE {
+                    assert!(CloseHandle(process) != 0);
+                    return p::ExitStatus(status as int);
+                }
+                if WaitForSingleObject(process, INFINITE) == WAIT_FAILED {
+                    assert!(CloseHandle(process) != 0);
+                    fail!("failure in WaitForSingleObject: {}", os::last_os_error());
+                }
+            }
+        }
+    }
+
+    #[cfg(unix)]
+    fn waitpid_os(pid: pid_t) -> p::ProcessExit {
+        use libc::funcs::posix01::wait;
+        let mut status = 0 as c_int;
+        match retry(|| unsafe { wait::waitpid(pid, &mut status, 0) }) {
+            -1 => fail!("unknown waitpid error: {}", super::last_error()),
+            _ => translate_status(status),
+        }
+    }
+}
+
+fn waitpid_nowait(pid: pid_t) -> Option<p::ProcessExit> {
+    return waitpid_os(pid);
+
+    // This code path isn't necessary on windows
+    #[cfg(windows)]
+    fn waitpid_os(_pid: pid_t) -> Option<p::ProcessExit> { None }
+
+    #[cfg(unix)]
+    fn waitpid_os(pid: pid_t) -> Option<p::ProcessExit> {
+        use libc::funcs::posix01::wait;
+        let mut status = 0 as c_int;
+        match retry(|| unsafe {
+            wait::waitpid(pid, &mut status, libc::WNOHANG)
+        }) {
+            n if n == pid => Some(translate_status(status)),
+            0 => None,
+            n => fail!("unknown waitpid error `{}`: {}", n, super::last_error()),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    #[test] #[cfg(windows)]
+    fn test_make_command_line() {
+        use super::make_command_line;
+        assert_eq!(
+            make_command_line("prog", [~"aaa", ~"bbb", ~"ccc"]),
+            ~"prog aaa bbb ccc"
+        );
+        assert_eq!(
+            make_command_line("C:\\Program Files\\blah\\blah.exe", [~"aaa"]),
+            ~"\"C:\\Program Files\\blah\\blah.exe\" aaa"
+        );
+        assert_eq!(
+            make_command_line("C:\\Program Files\\test", [~"aa\"bb"]),
+            ~"\"C:\\Program Files\\test\" aa\\\"bb"
+        );
+        assert_eq!(
+            make_command_line("echo", [~"a b c"]),
+            ~"echo \"a b c\""
+        );
+    }
+}

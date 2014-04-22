@@ -25,31 +25,38 @@ fn match_fn(m:Match) {
 }
 
 fn complete() {
-   match std::uint::parse_bytes(std::os::args()[2].as_bytes(), 10) {
-        Some(linenum) => { 
-            // input: linenum, colnum, fname
-            let charnum = std::uint::parse_bytes(std::os::args()[3].as_bytes(), 10).unwrap();
-            let fname = std::os::args()[4];
+      //match std::uint::parse_bytes(std::os::args()[2].as_bytes(), 10) {
+        // Some(linenum) => { 
+        //     // input: linenum, colnum, fname
+        //     let charnum = std::uint::parse_bytes(std::os::args()[3].as_bytes(), 10).unwrap();
+        //     let fname = std::os::args()[4];
 
-            let fpath = Path::new(fname);
-            let filetxt = BufferedReader::new(File::open(&fpath)).read_to_end().unwrap();
-            // print the start-end of the identifier being matched
-            let src = str::from_utf8(filetxt.as_slice()).unwrap();
-            let line = getline(&fpath, linenum);
-            let (start, pos) = racer::expand_ident(line, charnum);
-            println!("PREFIX {},{},{}", start, pos, line.slice(start, pos));
+        //     let fpath = Path::new(fname);
+        //     let filetxt = BufferedReader::new(File::open(&fpath)).read_to_end().unwrap();
+        //     // print the start-end of the identifier being matched
+        //     let src = str::from_utf8(filetxt.as_slice()).unwrap();
+        //     let line = getline(&fpath, linenum);
+        //     let (start, pos) = racer::expand_ident(line, charnum);
+        //     println!("PREFIX {},{},{}", start, pos, line.slice(start, pos));
 
-            let point = scopes::coords_to_point(src, linenum, charnum);
-            racer::complete_from_file(src, &fpath, point, &|m| match_fn(m));
-        }
-        None => {
+        //     let point = scopes::coords_to_point(src, linenum, charnum);
+        //     racer::complete_from_file(src, &fpath, point, &|m| match_fn(m));
+        // }
+
+        //None => {
             // input: a command line string passed in
-            let arg = std::os::args()[2];
-            let mut it = arg.split_str("::");
-            let p : ~[&str] = it.collect();
-            locate_abs_path(p, &|m|  match_fn(m));
-        }
-    }
+        //let mut arg = "\"" + std::os::args()[2].clone();
+        let mut arg = std::os::args()[2].clone();
+        //println!("arg: {}", arg);
+        std::os::setenv("RUST_SRC", arg);
+        let arg2 = std::os::args()[3];
+        //println!("arg2: {}", arg2);
+        let mut it = arg2.split_str("::");
+        let p : ~[&str] = it.collect();
+        //println!("p, {}", p);
+        locate_abs_path(p, &|m|  match_fn(m));
+        //}
+    
 }
 
 fn prefix() {
@@ -88,10 +95,10 @@ fn print_usage() {
 
 
 fn main() {
-    if std::os::getenv("RUST_SRC_PATH").is_none() {
-        println!("RUST_SRC_PATH environment variable must be set");
-        return;
-    }
+//     if std::os::getenv("RUST_SRC").is_none() {
+//         println!("RUST_SRC environment variable must be set");
+//         return;
+//     }
 
     let args = std::os::args().to_owned();
 
