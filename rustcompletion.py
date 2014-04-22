@@ -77,6 +77,7 @@ def callRacer(s):
     print(cmd)
     (stdout, stderr) = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True).communicate()
     results = []
+    print(results)
     limit = 0
     for line in stdout.splitlines():
         if limit > 5:

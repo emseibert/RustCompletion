@@ -271,11 +271,11 @@ fn locate_path_via_module(filepath: &Path, p: &[&str], outputfn: &|Match|) {
     if p.len() == 1 {
         return locate_defn_in_module(filepath, p[0], outputfn);
     }
-    if p.len() >= 3 {
-        let dir = filepath.dir_path();
-        println!("end: {} next to end: {}",p[p.len()-1],p[p.len()-2]);
-        return locate_func_in_defn(&dir.join(p[0]+".rs"),p[p.len()-1],p[p.len()-2],outputfn);
-    }
+    //if p.len() == 3 {
+    //    let dir = filepath.dir_path();
+        //println!("end: {} next to end: {}",p[p.len()-1],p[p.len()-2]);
+    //    return locate_func_in_defn(&dir.join(p[0]+".rs"),p[p.len()-1],p[p.len()-2],outputfn);
+    //}
     let file = File::open(filepath);
     if file.is_err() { return }
 
@@ -299,8 +299,10 @@ fn locate_path_via_module(filepath: &Path, p: &[&str], outputfn: &|Match|) {
                 //debug!("PHIL DIR {}", dir.as_str().unwrap());
                 // try searching file.rs
                 locate_path_via_module(&dir.join(l+".rs"), p.tail(), outputfn);
+                locate_func_in_defn(&dir.join(l+".rs"),p[p.len()-1],p[p.len()-2],outputfn);
                 // try searching dir/mod.rs
-                locate_path_via_module(&dir.join_many([l, "mod.rs"]), p.tail(), outputfn)
+                locate_path_via_module(&dir.join_many([l, "mod.rs"]), p.tail(), outputfn);
+                locate_func_in_defn(&dir.join_many([l, "mod.rs"]),p[p.len()-1],p[p.len()-2],outputfn);
             }
         }
         pt += line.len();  // +1 for /n
