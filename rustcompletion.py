@@ -13,32 +13,29 @@ class AllAutocomplete(sublime_plugin.EventListener):
     def on_query_completions(self, view, prefix, locations):
 
         functionCompletions = []
+        matches = []
+
         #gets the word completions from Sublime
-        #could possibly turn off sublime auto complete, and manually put in the versions we want
         view_words = view.extract_completions(prefix, locations[0])
-        #print("words" + str(view_words))
+        formatWords = []
+        for w in view_words:
+            t = (str(w), str(w))
+            formatWords.append(t)
+
+        matches += formatWords
 
         #gets region coordinates for all functions in text file
         function_regions = view.find_by_selector('meta.function')
+        
         #list of regions
         #print(str(function_regions))
         
-        #gets whole line of function, doesn't include multi-lined fn
-        #line = view.line(function_regions[2])
-        #print("line: " + str(view.substr(line)))
-        
-
         #iterates over each function region and parses for function that have same prefix
         for region in function_regions:
             line = view.line(region)
             strLine = view.substr(line)
             functionCompletions += functionParse(prefix, strLine)
 
-        #print("function completions?")
-        #print(functionCompletions)
-        
-
-        
         line = [view.substr(sublime.Region(view.line(l).a, l)) for l in locations]
         line_1 = line[0]
         if prefix == 'use' and len(line_1)<3:
@@ -53,7 +50,6 @@ class AllAutocomplete(sublime_plugin.EventListener):
                     #print("region: " + view.substr(regions[0]))
                     line_1 = view.substr(regions[0]) + '::' + prefix
                     
-            
 
         commandsOnLine = line_1.split(' ')
         isCrate = ""
@@ -64,15 +60,14 @@ class AllAutocomplete(sublime_plugin.EventListener):
                 lineToCall += s + " "
                 isCrate = lineToCall
             if len(commandsOnLine) > 2:
-                matches = callRacerCrates(commandsOnLine[len(commandsOnLine) - 1])
-
-                
+                matches += callRacerCrates(commandsOnLine[len(commandsOnLine) - 1])         
         else:
             lineToCall = commandsOnLine[len(commandsOnLine) - 1]
-            matches = callRacer(lineToCall)
-        
+            matches += callRacer(lineToCall)
+        #print("lineToCall")
+        #print(lineToCall)
         matches_no_dup = without_duplicates(matches) + functionCompletions
-        #print (matches_no_dup)
+
         return matches_no_dup
 
     def on_modified(self, view):
@@ -112,13 +107,42 @@ def callRacerCrates(s):
 
 def functionParse(prefix, line):
     matches = []
-    #print("FN PARSE")
     fn = line.split("fn ")[1]
     if fn[0] == prefix:
         fn_name = line.split('(')[0]
-        r = (str(fn_name), str(fn_name))
+        r = (str(fn.split(')')[0]) + ")", formatFn(fn))
         matches.append(r)
     return matches
+
+def formatFn(function):
+    paramVars = []
+    name = function.split('(')[0]
+    paramOutput = name+ "("
+    paramString = function.split('(')[1].split(')')[0]
+    indexOfColon = find(paramString, ':')
+    count = 0
+    for i in indexOfColon:
+        if count == (len(indexOfColon)-1):
+            paramOutput += getParam(i, paramString) + ")"
+        else:
+            paramOutput = paramOutput + getParam(i, paramString) + ", "
+        count+=1
+    return paramOutput
+
+def getParam(index, string):
+    param = ""
+
+    while (string[index] == ' ' or string[index] == ':'):
+        index -= 1
+
+    while (string[index] != ' ' and string[index] != ',' and index >= 0):
+        param = string[index] + param
+        index -= 1
+
+    return param
+
+def find(s, ch):
+    return [i for i, ltr in enumerate(s) if ltr == ch]
 
 def kfels_parse(prefix,line):
     new_prefix = ''
