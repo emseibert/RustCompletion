@@ -60,16 +60,40 @@ class AllAutocomplete(sublime_plugin.EventListener):
                 lineToCall += s + " "
                 isCrate = lineToCall
             if len(commandsOnLine) > 2:
-                matches += callRacerCrates(commandsOnLine[len(commandsOnLine) - 1])
-
-                
+                matches += callRacerCrates(commandsOnLine[len(commandsOnLine) - 1])         
         else:
             lineToCall = commandsOnLine[len(commandsOnLine) - 1]
             matches += callRacer(lineToCall)
         #print("lineToCall")
         #print(lineToCall)
         matches_no_dup = without_duplicates(matches) + functionCompletions
+
         return matches_no_dup
+
+    def on_modified(self, view):
+        if self.is_enabled():
+            for region in view.sel():  
+                # Only interested in empty regions, otherwise they may span multiple  
+                # lines, which doesn't make sense for this command.  
+                if region.empty():   
+                    # Expand the region to the full line it resides on, excluding the newline  
+                    line = view.line(region)
+                    lineContents = view.substr(line)
+                    if "&''" in lineContents:
+                        reg_m = re.match(r'(?P<begin>.*)&''',lineContents)
+                        if reg_m is not None:
+                            begin = reg_m.group('begin')
+                            new_line = begin + "&'"
+                            pos = view.sel()[0].begin()
+                            view.run_command("view_replace", { "begin" : view.sel()[0].begin()+1, "end": view.sel()[0].end(), "name": " " });
+                            
+
+    def is_enabled(self):
+        if str(sublime.active_window().active_view().settings().get('syntax')) == 'Packages/Rust/Rust.tmLanguage':
+            return True
+        else:
+            return False
+
 
 def callRacerCrates(s):
     RUST_SRC = str(os.path.join(os.path.dirname(os.path.realpath(__file__)), 'rust_src'))
@@ -130,15 +154,15 @@ def kfels_parse(prefix,line):
     return new_prefix
 
 def callRacer(s):
-    #rust_src = str(os.path.join(os.path.dirname(os.path.realpath(__file__)), 'rust_src'))
-    rust_src = "/Users/emilyseibert/rust/src"
+    rust_src = str(os.path.join(os.path.dirname(os.path.realpath(__file__)), 'rust_src'))
+    #rust_src = "/Users/emilyseibert/rust/src"
     cmd_loc = str(os.path.join(os.path.dirname(os.path.realpath(__file__)), 'racer/bin'))
-
+    #print("S: " + s)
     cmd = 'cd "' + cmd_loc + '"; ./racer complete "' + rust_src + '" '+ s
-    print(cmd)
+    #print(cmd)
     (stdout, stderr) = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True).communicate()
     results = []
-    print(results)
+    #print(results)
     limit = 0
     for line in stdout.splitlines():
         if limit > 5:
@@ -168,8 +192,8 @@ def callRacer(s):
             
             results.append(t)
             limit += 1
-
-   # print(results)
+    
+    #print(results)
     return results
 
 def parseLine(line):
@@ -223,3 +247,7 @@ def without_duplicates(words):
         if w not in result:
             result.append(w)
     return result
+
+class ViewReplaceCommand(sublime_plugin.TextCommand):
+  def run(self, edit, begin, end, name):
+    self.view.replace(edit, sublime.Region(begin, end), name)
