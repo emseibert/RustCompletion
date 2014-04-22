@@ -11,6 +11,34 @@ import subprocess
 class AllAutocomplete(sublime_plugin.EventListener):
 
     def on_query_completions(self, view, prefix, locations):
+
+        functionCompletions = []
+        #gets the word completions from Sublime
+        #could possibly turn off sublime auto complete, and manually put in the versions we want
+        view_words = view.extract_completions(prefix, locations[0])
+        print("words" + str(view_words))
+
+        #gets region coordinates for all functions in text file
+        function_regions = view.find_by_selector('meta.function')
+        #list of regions
+        print(str(function_regions))
+        
+        #gets whole line of function, doesn't include multi-lined fn
+        #line = view.line(function_regions[2])
+        #print("line: " + str(view.substr(line)))
+        
+
+        #iterates over each function region and parses for function that have same prefix
+        for region in function_regions:
+            line = view.line(region)
+            strLine = view.substr(line)
+            functionCompletions += functionParse(prefix, strLine)
+
+        print("function completions?")
+        print(functionCompletions)
+        
+
+        
         line = [view.substr(sublime.Region(view.line(l).a, l)) for l in locations]
         line_1 = line[0]
         if prefix == 'use' and len(line_1)<3:
@@ -29,7 +57,6 @@ class AllAutocomplete(sublime_plugin.EventListener):
 
         commandsOnLine = line_1.split(' ')
         isCrate = ""
-        matches = []
 
         if (commandsOnLine[0] == "extern"):
             lineToCall = "";
@@ -45,7 +72,8 @@ class AllAutocomplete(sublime_plugin.EventListener):
             matches = callRacer(lineToCall)
         #print("lineToCall")
         #print(lineToCall)
-        matches_no_dup = without_duplicates(matches)
+        matches_no_dup = without_duplicates(matches) + functionCompletions
+        print (matches_no_dup)
         return matches_no_dup
 
 def callRacerCrates(s):
@@ -58,6 +86,15 @@ def callRacerCrates(s):
 
     return (results)
 
+def functionParse(prefix, line):
+    matches = []
+    print("FN PARSE")
+    fn = line.split("fn ")[1]
+    if fn[0] == prefix:
+        fn_name = line.split('(')[0]
+        r = (str(fn_name), str(fn_name))
+        matches.append(r)
+    return matches
 
 def kfels_parse(prefix,line):
     new_prefix = ''
@@ -69,8 +106,8 @@ def kfels_parse(prefix,line):
     return new_prefix
 
 def callRacer(s):
-    rust_src = str(os.path.join(os.path.dirname(os.path.realpath(__file__)), 'rust_src'))
-    #rust_src = "/Users/emilyseibert/rust/src"
+    #rust_src = str(os.path.join(os.path.dirname(os.path.realpath(__file__)), 'rust_src'))
+    rust_src = "/Users/emilyseibert/rust/src"
     cmd_loc = str(os.path.join(os.path.dirname(os.path.realpath(__file__)), 'racer/bin'))
 
     cmd = 'cd "' + cmd_loc + '"; ./racer complete "' + rust_src + '" '+ s
