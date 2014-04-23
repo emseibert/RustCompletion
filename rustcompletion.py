@@ -17,24 +17,29 @@ class AllAutocomplete(sublime_plugin.EventListener):
 
         #gets the word completions from Sublime
         view_words = view.extract_completions(prefix, locations[0])
+        
+        #gets region coordinates for all functions in text file
+        function_regions = view.find_by_selector('meta.function')
+        
+        #list of regions
+        #print(str(function_regions
+
+        list_of_fn_names = []        
+        #iterates over each function region and parses for function that have same prefix
+        for region in function_regions:
+            line = view.line(region)
+            strLine = view.substr(line)
+            list_of_fn_names.append(getFnNames(strLine))
+            functionCompletions += functionParse(prefix, strLine)
+
+        view_words = without_fn_dups(view_words, list_of_fn_names)
+
         formatWords = []
         for w in view_words:
             t = (str(w), str(w))
             formatWords.append(t)
 
         matches += formatWords
-
-        #gets region coordinates for all functions in text file
-        function_regions = view.find_by_selector('meta.function')
-        
-        #list of regions
-        #print(str(function_regions))
-        
-        #iterates over each function region and parses for function that have same prefix
-        for region in function_regions:
-            line = view.line(region)
-            strLine = view.substr(line)
-            functionCompletions += functionParse(prefix, strLine)
 
         line = [view.substr(sublime.Region(view.line(l).a, l)) for l in locations]
         line_1 = line[0]
@@ -66,7 +71,7 @@ class AllAutocomplete(sublime_plugin.EventListener):
             matches += callRacer(lineToCall)
         #print("lineToCall")
         #print(lineToCall)
-        matches_no_dup = without_duplicates(matches) + functionCompletions
+        matches_no_dup = functionCompletions + without_duplicates(matches)
 
         return matches_no_dup
 
@@ -94,6 +99,20 @@ class AllAutocomplete(sublime_plugin.EventListener):
         else:
             return False
 
+def without_fn_dups(sublimeList, fnList):
+    matches = []
+
+    for s in sublimeList:
+        if s not in fnList:
+            matches.append(s)
+
+    print(matches)
+    return matches
+
+def getFnNames(strLine):
+    removeFn = strLine.split('fn ')[1]
+    getName = removeFn.split('(')[0]
+    return getName
 
 def callRacerCrates(s):
     RUST_SRC = str(os.path.join(os.path.dirname(os.path.realpath(__file__)), 'rust_src'))
