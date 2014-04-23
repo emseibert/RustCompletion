@@ -242,15 +242,15 @@ def parseLine(line):
         splitLine.pop(0)
     if (splitLine[0]=='pub'): 
         if (splitLine[1]=='struct'):
-            result = splitLine[2].split('<')[0] + ";"
+            result = splitLine[2].split('<')[0]
         elif (splitLine[1]=='mod'):
-            result = splitLine[2].split(';')[0] + ";"
+            result = splitLine[2].split(';')[0]
         elif (splitLine[1]=='fn'):
             result = splitLine[2].split('<')[0] + "()"
         elif (splitLine[1]=='trait'):
-            result = splitLine[2].split('<')[0] + ";"
+            result = splitLine[2].split('<')[0]
         elif (splitLine[1]=='enum'):
-            result = splitLine[2].split('<')[0] + ";"
+            result = splitLine[2].split('<')[0] 
         elif (splitLine[1].strip()=='unsafe'):
             if (splitLine[2].strip()=='fn'):
                 result = parse_rust_func(line)
