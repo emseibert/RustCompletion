@@ -6,7 +6,7 @@ This sublime package provides autocompletion for Rust. This includes auto-comple
 ![Basic Auto-Complete](/pics/simple.tiff?raw=true)
 (Note: we cannot ensure that all of these are 100% complete, but from the testing we performed it does capture the majority of them.) 
 
-We used Phil Dawes' RACER program (located at https://github.com/phildawes/racer.git) as the starter for our package. It looks through Rust's source code for possible auto-complete options and returns the line that corresponds. We added additional functionality to RACER to accommodate more functions, and traits, and a few other things. We also added auto-complete for personal functions (i.e. functions you wrote within the code) and for lifetime variables.
+We used Phil Dawes' RACER program (located at https://github.com/phildawes/racer.git) as the starter for our package. It looks through Rust's source code for possible auto-complete options and returns the line that corresponds. We added additional functionality to RACER to accommodate traits, enums, and functions of structs, traits and enums. We also added auto-complete for personal functions (i.e. functions you wrote within the code) and for lifetime variables.
 
 Example of Auto Complete for Personal Functions:
 ![Personal Functions](/pics/personalFunc.tiff?raw=true)
