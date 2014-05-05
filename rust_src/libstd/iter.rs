@@ -2013,8 +2013,7 @@ pub struct RangeInclusive<A> {
 
 /// Return an iterator over the range [start, stop]
 #[inline]
-pub fn range_inclusive<A: Add<A, A> + Ord + Clone + One + ToPrimitive>(start: A, stop: A)
-    -> RangeInclusive<A> {
+pub fn range_inclusive<A: Add<A, A> + Ord + Clone + One + ToPrimitive>(start: A, stop: A)-> RangeInclusive<A> {
     RangeInclusive{range: range(start, stop), done: false}
 }
 
@@ -2111,8 +2110,7 @@ pub struct RangeStepInclusive<A> {
 
 /// Return an iterator over the range [start, stop] by `step`. It handles overflow by stopping.
 #[inline]
-pub fn range_step_inclusive<A: CheckedAdd + Ord + Clone + Zero>(start: A, stop: A,
-                                                                step: A) -> RangeStepInclusive<A> {
+pub fn range_step_inclusive<A: CheckedAdd + Ord + Clone + Zero>(start: A, stop: A, step: A) -> RangeStepInclusive<A> {
     let rev = step < Zero::zero();
     RangeStepInclusive{state: start, stop: stop, step: step, rev: rev, done: false}
 }

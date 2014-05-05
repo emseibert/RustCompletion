@@ -121,7 +121,7 @@ pub fn find_ident_end(s : &str, pos : uint) -> uint {
     return end;
 }
 
-//My shit again
+
 
 fn locate_func_in_defn(filepath : &Path, s : &str, def : &str, outputfn : &|Match|) {
     let file = File::open(filepath);
@@ -204,7 +204,7 @@ fn locate_defn_in_module(filepath : &Path, s : &str, outputfn : &|Match|) {
                            mtype: Struct};
             (*outputfn)(m);
         }
-        //Oh boy my shit
+        
         for n in line.find_str(traitsearchstr+s).move_iter() {
             let end = find_path_end(line, n+8);
             let l = line.slice(n+8, end);
@@ -216,7 +216,7 @@ fn locate_defn_in_module(filepath : &Path, s : &str, outputfn : &|Match|) {
             (*outputfn)(m);
         }
 
-        //Oh boy my shit again
+        
         for n in line.find_str(enumsearchstr+s).move_iter() {
             let end = find_path_end(line, n+8);
             let l = line.slice(n+8, end);

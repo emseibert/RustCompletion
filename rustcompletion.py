@@ -11,6 +11,7 @@ import subprocess
 class AllAutocomplete(sublime_plugin.EventListener):
 
     def on_query_completions(self, view, prefix, locations):
+        #only proceed if currently writing in Rust
         if self.is_enabled():
             functionCompletions = []
             matches = []
@@ -18,6 +19,7 @@ class AllAutocomplete(sublime_plugin.EventListener):
             line = [view.substr(sublime.Region(view.line(l).a, l)) for l in locations]
             line_1 = line[0]
 
+            #if the prefix is &, then the get the lifetimes currently in the line
             if prefix == "":
                 return get_all_lifetimes(line_1)
 
@@ -27,9 +29,7 @@ class AllAutocomplete(sublime_plugin.EventListener):
             #gets region coordinates for all functions in text file
             function_regions = view.find_by_selector('meta.function')
             
-            #list of regions
-            #print(str(function_regions
-
+            
             list_of_fn_names = []        
             #iterates over each function region and parses for function that have same prefix
             for region in function_regions:
@@ -47,18 +47,20 @@ class AllAutocomplete(sublime_plugin.EventListener):
 
             matches += formatWords
 
+            #disallows autocompletion when prefix is libc since this was extremely time consuming
             if prefix == "libc":
                 return[('','')]
+            
             if prefix == 'use' and len(line_1)<3:
                 return [('use','use')]
             if len(line_1)>2:
                 #Parse line to get all prior use's (let x = aa::bb::cc -> aa::bb)
                 res = kfels_parse(prefix, line)
+                
                 if res is not '':
                     regions = view.find_all(r'use (.*?)::%s'%res,)
                 
                     if len(regions) is not 0:
-                        #print("region: " + view.substr(regions[0]))
                         line_1 = view.substr(regions[0]) + '::' + prefix
                         
 
@@ -75,13 +77,13 @@ class AllAutocomplete(sublime_plugin.EventListener):
             else:
                 lineToCall = commandsOnLine[len(commandsOnLine) - 1]
                 matches += callRacer(lineToCall)
-            #print("lineToCall")
-            #print(lineToCall)
+            
             matches_no_dup = functionCompletions + without_duplicates(matches)
 
             return matches_no_dup
 
     def on_modified(self, view):
+        #only proceed if currently writing in Rust
         if self.is_enabled():
             for region in view.sel():  
                 # Only interested in empty regions, otherwise they may span multiple  
@@ -90,27 +92,33 @@ class AllAutocomplete(sublime_plugin.EventListener):
                     # Expand the region to the full line it resides on, excluding the newline  
                     line = view.line(region)
                     lineContents = view.substr(line)
+
+                    #parses the line and removes double single quotes if they follow "<" or "&" or "< ?,"
                     if "fn" in lineContents:
                         if "&''" in lineContents:
                             reg_m = re.match(r'(?P<begin>.*)&''',lineContents)
                             if reg_m is not None:
                                 begin = reg_m.group('begin')
                                 pos = view.sel()[0].begin()
+                                #replace '' with '
                                 view.run_command("view_replace", { "begin" : view.sel()[0].begin()+1, "end": view.sel()[0].end(), "name": " " });
+                        
                         if "<''" in lineContents:
                             reg_m = re.match(r'(?P<begin>.*)<''',lineContents)
                             if reg_m is not None:
                                 begin = reg_m.group('begin')
                                 pos = view.sel()[0].begin()
+                                #replace '' with '
                                 view.run_command("view_replace", { "begin" : view.sel()[0].begin()+1, "end": view.sel()[0].end(), "name": " " });
                         elif "<'" in lineContents:
                             reg_m = re.match(r"(?P<begin>.*fn.*<'[a_zA_Z](,[\s]*'[\s]*(\w))*),[\s]*''", lineContents)
                             if reg_m is not None:
                                 begin = reg_m.group('begin')
                                 pos = view.sel()[0].begin()
+                                #replace '' with '
                                 view.run_command("view_replace", { "begin" : view.sel()[0].begin()+1, "end": view.sel()[0].end(), "name": " " });
                                  
-
+    #Returns true if the syntax of the active view is set to Rust, 
     def is_enabled(self):
         if str(sublime.active_window().active_view().settings().get('syntax')) == 'Packages/Rust/Rust.tmLanguage':
             return True
@@ -124,7 +132,7 @@ def without_fn_dups(sublimeList, fnList):
         if s not in fnList:
             matches.append(s)
 
-    #print(matches)
+
     return matches
 
 def getFnNames(strLine):
@@ -149,6 +157,7 @@ def functionParse(prefix, line):
         fn_name = line.split('(')[0]
         r = (str(fn.split(')')[0]) + ")", formatFn(fn))
         matches.append(r)
+
     return matches
 
 def formatFn(function):
@@ -158,11 +167,14 @@ def formatFn(function):
     paramString = function.split('(')[1].split(')')[0]
     indexOfColon = find(paramString, ':')
     count = 0
+    
     for i in indexOfColon:
+        
         if count == (len(indexOfColon)-1):
-            paramOutput += getParam(i, paramString) + ")"
+            paramOutput += "${" + str(count+1) + ":" + getParam(i, paramString) + "})"
         else:
-            paramOutput = paramOutput + getParam(i, paramString) + ", "
+            paramOutput = paramOutput + "${" + str(count+1) + ":" + getParam(i, paramString)+ "}" + ", "
+        
         count+=1
     return paramOutput
 
@@ -184,22 +196,24 @@ def find(s, ch):
 def kfels_parse(prefix,line):
     new_prefix = ''
     reg2 = re.match(r'.*?([a-zA-Z\d::]+)::%s'%prefix, line[0])
+
     if reg2 is not None:
         pre_pref = reg2.groups(1)
+
         if pre_pref is not []:
             new_prefix = pre_pref[0]
+
     return new_prefix
 
 def callRacer(s):
     rust_src = str(os.path.join(os.path.dirname(os.path.realpath(__file__)), 'rust_src'))
-    #rust_src = "/Users/emilyseibert/rust/src"
     cmd_loc = str(os.path.join(os.path.dirname(os.path.realpath(__file__)), 'racer/bin'))
-    #print("S: " + s)
+
     cmd = 'cd "' + cmd_loc + '"; ./racer complete "' + rust_src + '" '+ s
-    #print(cmd)
+
     (stdout, stderr) = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True).communicate()
     results = []
-    #print(results)
+
     limit = 0
     for line in stdout.splitlines():
         if limit > 5:
@@ -207,77 +221,89 @@ def callRacer(s):
         elif line != b'':
             line = line.decode(encoding='UTF-8').strip()
             test = line
-            if test[:6] == '#[path':
+            if test[:6] == '#[path':                
                 continue
 
             #remove commented code and test functions from results
-            if test.startswith('//') or test.startswith('test!(') or test.startswith('iotest!'): #remove commented code and test functions
-                #print(test + " is a comment")
+            if test.startswith('//') or test.startswith('test!(') or test.startswith('iotest!'): 
                 continue
-            #print("before: " + line)
+
             matched_reg = re.match(r'(?:pub)*(?:\s)*(?:fn|mod|struct)\s*(.*)(?:{|;)', line)
             matched = parseLine(line)
             matched_full = matched
+
             if matched_reg is not None:
-                #print("match_reg")
                 matched_full = matched_reg.groups(1)[0]
-                #print(matched_full)
-            #else:
-                #print("NONE")
-            #print("after: " + matched)
+                
             t =  (matched_full, matched)
             
             results.append(t)
             limit += 1
     
-    #print(results)
+    
     return results
 
 def parseLine(line):
-    #print (line)
+    
     splitLine = line.split(' ')
     result = line
-   # print(splitLine)
+
     if (splitLine[0]=='#[cfg(not(test))]'):
         splitLine.pop(0)
+
     if (splitLine[0]=='pub'): 
         if (splitLine[1]=='struct'):
             result = splitLine[2].split('<')[0]
+
         elif (splitLine[1]=='mod'):
             result = splitLine[2].split(';')[0]
+
         elif (splitLine[1]=='fn'):
             result = splitLine[2].split('<')[0] + "()"
+
         elif (splitLine[1]=='trait'):
             result = splitLine[2].split('<')[0]
+
         elif (splitLine[1]=='enum'):
-            result = splitLine[2].split('<')[0] 
+            result = splitLine[2].split('<')[0]
+
         elif (splitLine[1].strip()=='unsafe'):
             if (splitLine[2].strip()=='fn'):
                 result = parse_rust_func(line)
+
     if (splitLine[0].strip()=="fn"):
             result = parse_rust_func(line)
+
     if (splitLine[1].strip()=="fn"):
             result = parse_rust_func(line)
+
     return result 
 
 def parse_rust_func(line):
     result = line
     reg = re.match(r'(?:pub)*(?:\s)*(?:unsafe)*(?:\s)*(?:fn)\s*(?P<func>\b(?:\w)*\b(?:<(?:.*)>)*)(?:\((?P<args>[^)]*)\))(?:.*)(?:{)*(?:;)*', line)
+    
     if reg is not None:
         func = reg.group('func') + "("
         result = func
         func_list = func.split('<')
+
         if len(func_list) >1:
             result = func_list[0] + "("
+
         args = reg.group('args')
         args_list = args.split(',')
-        if len(args_list) ==1:
-            result += (args_list[0].split(':')[0])
+        if len(args_list) >=1:
+            result += '${1:'+(args_list[0].split(':')[0])+'}'
             args_list.pop(0)
+
         if len(args_list) >= 1:
+            i = 2
             for x in args_list:
-                result += ("," + x.split(':')[0])
-        result += (")")
+                result += ', ${'+str(i)+':' + x.split(':')[0] + '}'
+                i += 1
+        result += ')'
+
     return result
 
 # keeps first instance of every word and retains the original order
@@ -288,6 +314,7 @@ def without_duplicates(words):
             result.append(w)
     return result
 
+#gets all the lifetime variables in lines
 def get_all_lifetimes(line):
     result = []
     line_2 = line.split('<')
