@@ -1,4 +1,4 @@
-CS4414FinalProject
+Rust Completion
 ==================
 Note that this package is not currently working for Mac OS X. 
 
