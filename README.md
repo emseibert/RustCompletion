@@ -17,7 +17,7 @@ Example of Auto Complete for Lifetime Variables:
 For functions, the auto-complete pop-up shows the function name and its arguments and their types, then selecting the function prints the function with just the arguments that you can tab through to edit. 
 
 Example of Tabbing for function arguments:
-![Argument Tabbing](/pics/arguments.tiff?raw=true)
+![Argument Tabbing](/pics/arguments.png?raw=true)
 
 We also added the ability to continue off of previously stated 'use' statements. 
 
